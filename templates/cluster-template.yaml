@@ -1,0 +1,206 @@
+---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: ${CLUSTER_NAME}
+  namespace: ${NAMESPACE:=default}
+spec:
+  clusterNetwork:
+    pods:
+      cidrBlocks:
+        - 10.244.0.0/16
+    services:
+      cidrBlocks:
+        - 10.96.0.0/12
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    kind: NvidiaCarbideCluster
+    name: ${CLUSTER_NAME}
+  controlPlaneRef:
+    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+    kind: KubeadmControlPlane
+    name: ${CLUSTER_NAME}-control-plane
+
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: NvidiaCarbideCluster
+metadata:
+  name: ${CLUSTER_NAME}
+  namespace: ${NAMESPACE:=default}
+spec:
+  siteRef:
+    name: ${NVIDIA_CARBIDE_SITE_NAME}
+
+  tenantID: ${NVIDIA_CARBIDE_TENANT_ID}
+
+  vpc:
+    name: ${CLUSTER_NAME}-vpc
+    networkVirtualizationType: "ETHERNET_VIRTUALIZER"
+    labels:
+      cluster: ${CLUSTER_NAME}
+
+    networkSecurityGroup:
+      name: ${CLUSTER_NAME}-nsg
+      rules:
+        - name: "allow-ssh"
+          direction: "ingress"
+          protocol: "tcp"
+          portRange: "22"
+          sourceCIDR: "0.0.0.0/0"
+          action: "allow"
+        - name: "allow-k8s-api"
+          direction: "ingress"
+          protocol: "tcp"
+          portRange: "6443"
+          sourceCIDR: "0.0.0.0/0"
+          action: "allow"
+        - name: "allow-internal"
+          direction: "ingress"
+          protocol: "all"
+          sourceCIDR: "10.100.0.0/16"
+          action: "allow"
+
+  subnets:
+    - name: "control-plane"
+      cidr: ${NVIDIA_CARBIDE_CONTROL_PLANE_SUBNET_CIDR:=10.100.1.0/24}
+      role: "control-plane"
+      labels:
+        subnet-type: "control-plane"
+    - name: "worker"
+      cidr: ${NVIDIA_CARBIDE_WORKER_SUBNET_CIDR:=10.100.2.0/24}
+      role: "worker"
+      labels:
+        subnet-type: "worker"
+
+  authentication:
+    secretRef:
+      name: ${NVIDIA_CARBIDE_CREDENTIALS_SECRET_NAME:=nvidia-carbide-credentials}
+      namespace: ${NAMESPACE:=default}
+
+---
+apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+kind: KubeadmControlPlane
+metadata:
+  name: ${CLUSTER_NAME}-control-plane
+  namespace: ${NAMESPACE:=default}
+spec:
+  replicas: ${CONTROL_PLANE_MACHINE_COUNT:=3}
+  version: ${KUBERNETES_VERSION:=v1.28.0}
+
+  machineTemplate:
+    infrastructureRef:
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+      kind: NvidiaCarbideMachineTemplate
+      name: ${CLUSTER_NAME}-control-plane
+
+  kubeadmConfigSpec:
+    clusterConfiguration:
+      apiServer:
+        extraArgs:
+          cloud-provider: external
+      controllerManager:
+        extraArgs:
+          cloud-provider: external
+
+    initConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+          cloud-provider: external
+
+    joinConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+          cloud-provider: external
+
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: NvidiaCarbideMachineTemplate
+metadata:
+  name: ${CLUSTER_NAME}-control-plane
+  namespace: ${NAMESPACE:=default}
+spec:
+  template:
+    spec:
+      instanceType:
+        id: ${NVIDIA_CARBIDE_CONTROL_PLANE_INSTANCE_TYPE_ID}
+
+      network:
+        subnetName: "control-plane"
+
+      sshKeyGroups:
+        - ${NVIDIA_CARBIDE_SSH_KEY_GROUP_ID}
+
+      labels:
+        role: "control-plane"
+        cluster: ${CLUSTER_NAME}
+
+---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: MachineDeployment
+metadata:
+  name: ${CLUSTER_NAME}-workers
+  namespace: ${NAMESPACE:=default}
+spec:
+  clusterName: ${CLUSTER_NAME}
+  replicas: ${WORKER_MACHINE_COUNT:=3}
+
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
+      cluster.x-k8s.io/deployment-name: ${CLUSTER_NAME}-workers
+
+  template:
+    metadata:
+      labels:
+        cluster.x-k8s.io/cluster-name: ${CLUSTER_NAME}
+        cluster.x-k8s.io/deployment-name: ${CLUSTER_NAME}-workers
+    spec:
+      clusterName: ${CLUSTER_NAME}
+      version: ${KUBERNETES_VERSION:=v1.28.0}
+
+      bootstrap:
+        configRef:
+          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+          kind: KubeadmConfigTemplate
+          name: ${CLUSTER_NAME}-worker
+
+      infrastructureRef:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+        kind: NvidiaCarbideMachineTemplate
+        name: ${CLUSTER_NAME}-worker
+
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: NvidiaCarbideMachineTemplate
+metadata:
+  name: ${CLUSTER_NAME}-worker
+  namespace: ${NAMESPACE:=default}
+spec:
+  template:
+    spec:
+      instanceType:
+        id: ${NVIDIA_CARBIDE_WORKER_INSTANCE_TYPE_ID}
+
+      network:
+        subnetName: "worker"
+
+      sshKeyGroups:
+        - ${NVIDIA_CARBIDE_SSH_KEY_GROUP_ID}
+
+      labels:
+        role: "worker"
+        cluster: ${CLUSTER_NAME}
+
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+kind: KubeadmConfigTemplate
+metadata:
+  name: ${CLUSTER_NAME}-worker
+  namespace: ${NAMESPACE:=default}
+spec:
+  template:
+    spec:
+      joinConfiguration:
+        nodeRegistration:
+          kubeletExtraArgs:
+            cloud-provider: external

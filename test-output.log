@@ -1,0 +1,30 @@
+"/home/fdupont/Code/github.com/NVIDIA/carbide/cluster-api-provider-carbide/bin/controller-gen" rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+"/home/fdupont/Code/github.com/NVIDIA/carbide/cluster-api-provider-carbide/bin/controller-gen" object:headerFile="hack/boilerplate.go.txt" paths="./..."
+go fmt ./...
+internal/controller/carbidemachine_controller_test.go
+pkg/cloud/instance.go
+pkg/cloud/networking.go
+go vet ./...
+# github.com/NVIDIA/cluster-api-provider-carbide/openshift/cloudprovider
+openshift/cloudprovider/carbide_cloud.go:20:2: "context" imported and not used
+openshift/cloudprovider/carbide_cloud.go:66:9: cannot use &CarbideCloud{…} (value of type *CarbideCloud) as "k8s.io/cloud-provider".Interface value in return statement: *CarbideCloud does not implement "k8s.io/cloud-provider".Interface (wrong type for method Clusters)
+		have Clusters() ("k8s.io/cloud-provider".Clusters, error)
+		want Clusters() ("k8s.io/cloud-provider".Clusters, bool)
+openshift/cloudprovider/carbide_cloud.go:96:9: cannot use c (variable of type *CarbideCloud) as "k8s.io/cloud-provider".Zones value in return statement: *CarbideCloud does not implement "k8s.io/cloud-provider".Zones (wrong type for method GetZoneByNodeName)
+		have GetZoneByNodeName(context.Context, string) ("k8s.io/cloud-provider".Zone, error)
+		want GetZoneByNodeName(context.Context, types.NodeName) ("k8s.io/cloud-provider".Zone, error)
+openshift/cloudprovider/zones.go:21:2: "fmt" imported and not used
+# github.com/NVIDIA/cluster-api-provider-carbide/pkg/cloud
+# [github.com/NVIDIA/cluster-api-provider-carbide/pkg/cloud]
+vet: pkg/cloud/client_test.go:394:12: undefined: NSGRule
+# github.com/NVIDIA/cluster-api-provider-carbide/openshift/machine
+vet: openshift/machine/controller.go:58:43: cannot use machine (variable of type *"k8s.io/apimachinery/pkg/runtime".Unknown) as client.Object value in argument to r.Get: *"k8s.io/apimachinery/pkg/runtime".Unknown does not implement client.Object (missing method GetAnnotations)
+# github.com/NVIDIA/cluster-api-provider-carbide/internal/controller
+# [github.com/NVIDIA/cluster-api-provider-carbide/internal/controller]
+vet: internal/controller/carbidecluster_controller_test.go:81:40: undefined: infrastructurev1beta1.SecretReference
+# github.com/NVIDIA/cluster-api-provider-carbide/test/integration
+# [github.com/NVIDIA/cluster-api-provider-carbide/test/integration]
+vet: test/integration/integration_test.go:91:32: not enough arguments in call to (&controller.CarbideClusterReconciler{…}).SetupWithManager
+	have (manager.Manager)
+	want (context.Context, controllerruntime.Manager)
+make: *** [Makefile:58: vet] Error 1

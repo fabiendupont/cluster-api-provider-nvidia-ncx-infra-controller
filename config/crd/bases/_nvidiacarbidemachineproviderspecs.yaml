@@ -1,0 +1,117 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: nvidiacarbidemachineproviderspecs.
+spec:
+  group: ""
+  names:
+    kind: NvidiaCarbideMachineProviderSpec
+    listKind: NvidiaCarbideMachineProviderSpecList
+    plural: nvidiacarbidemachineproviderspecs
+    singular: nvidiacarbidemachineproviderspec
+  scope: Namespaced
+  versions:
+  - name: ""
+    schema:
+      openAPIV3Schema:
+        description: NvidiaCarbideMachineProviderSpec defines the desired state for OpenShift
+          Machine API
+        properties:
+          additionalSubnetIds:
+            description: AdditionalSubnetIDs for multi-NIC configurations
+            items:
+              description: AdditionalSubnet defines an additional network interface
+              properties:
+                isPhysical:
+                  description: IsPhysical indicates if this is a physical interface
+                  type: boolean
+                subnetId:
+                  description: SubnetID is the subnet UUID for this interface
+                  type: string
+              required:
+              - subnetId
+              type: object
+            type: array
+          allowUnhealthyMachine:
+            description: AllowUnhealthyMachine allows provisioning on an unhealthy
+              machine
+            type: boolean
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          credentialsSecret:
+            description: |-
+              CredentialsSecret references a secret containing NVIDIA Carbide API credentials
+              The secret must contain: endpoint, orgName, token
+            properties:
+              name:
+                description: Name of the secret
+                type: string
+              namespace:
+                description: Namespace of the secret
+                type: string
+            required:
+            - name
+            - namespace
+            type: object
+          instanceTypeId:
+            description: |-
+              InstanceTypeID specifies the NVIDIA Carbide instance type UUID
+              Mutually exclusive with MachineID
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          labels:
+            additionalProperties:
+              type: string
+            description: Labels to apply to the NVIDIA Carbide instance
+            type: object
+          machineId:
+            description: |-
+              MachineID specifies a specific machine UUID for targeted provisioning
+              Mutually exclusive with InstanceTypeID
+            type: string
+          metadata:
+            type: object
+          siteId:
+            description: SiteID is the NVIDIA Carbide Site UUID
+            type: string
+          sshKeyGroupIds:
+            description: SSHKeyGroupIDs contains SSH key group IDs
+            items:
+              type: string
+            type: array
+          subnetId:
+            description: SubnetID is the primary subnet UUID
+            type: string
+          tenantId:
+            description: TenantID is the NVIDIA Carbide tenant ID
+            type: string
+          userData:
+            description: UserData contains the cloud-init user data
+            type: string
+          vpcId:
+            description: VpcID is the VPC UUID
+            type: string
+        required:
+        - credentialsSecret
+        - siteId
+        - subnetId
+        - tenantId
+        - vpcId
+        type: object
+    served: true
+    storage: true

@@ -1,0 +1,142 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: nvidiacarbidemachinetemplates.infrastructure.cluster.x-k8s.io
+spec:
+  group: infrastructure.cluster.x-k8s.io
+  names:
+    categories:
+    - cluster-api
+    kind: NvidiaCarbideMachineTemplate
+    listKind: NvidiaCarbideMachineTemplateList
+    plural: nvidiacarbidemachinetemplates
+    singular: nvidiacarbidemachinetemplate
+  scope: Namespaced
+  versions:
+  - name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: NvidiaCarbideMachineTemplate is the Schema for the nvidiacarbidemachinetemplates
+          API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the desired state of NvidiaCarbideMachineTemplate
+            properties:
+              template:
+                description: Template contains the NvidiaCarbideMachine template specification
+                properties:
+                  metadata:
+                    description: Standard object's metadata
+                    type: object
+                  spec:
+                    description: Spec is the specification of the desired behavior
+                      of the machine
+                    properties:
+                      instanceType:
+                        description: InstanceType specifies the machine instance configuration
+                        properties:
+                          allowUnhealthyMachine:
+                            description: AllowUnhealthyMachine allows provisioning
+                              on an unhealthy machine
+                            type: boolean
+                          id:
+                            description: |-
+                              ID specifies the NVIDIA Carbide instance type UUID
+                              Mutually exclusive with MachineID
+                            type: string
+                          machineID:
+                            description: |-
+                              MachineID specifies a specific machine UUID for targeted provisioning
+                              Mutually exclusive with ID
+                            type: string
+                        type: object
+                      labels:
+                        additionalProperties:
+                          type: string
+                        description: Labels to apply to the NVIDIA Carbide instance
+                        type: object
+                      network:
+                        description: Network configuration for the machine
+                        properties:
+                          additionalInterfaces:
+                            description: AdditionalInterfaces for multi-NIC configurations
+                            items:
+                              description: NetworkInterface defines an additional
+                                network interface
+                              properties:
+                                isPhysical:
+                                  description: IsPhysical indicates if this is a physical
+                                    interface
+                                  type: boolean
+                                subnetName:
+                                  description: SubnetName specifies the subnet for
+                                    this interface
+                                  type: string
+                              required:
+                              - subnetName
+                              type: object
+                            type: array
+                          subnetName:
+                            description: SubnetName specifies the subnet to attach
+                              the machine to
+                            type: string
+                        required:
+                        - subnetName
+                        type: object
+                      operatingSystem:
+                        description: OperatingSystem configuration for the machine
+                        properties:
+                          type:
+                            description: Type specifies the OS type (e.g., "ubuntu",
+                              "rhel")
+                            type: string
+                          version:
+                            description: Version specifies the OS version
+                            type: string
+                        type: object
+                      providerID:
+                        description: |-
+                          ProviderID is the unique identifier for the machine instance
+                          Format: nvidia-carbide://org/tenant/site/instance-id
+                        type: string
+                      sshKeyGroups:
+                        description: SSHKeyGroups contains SSH key group IDs for accessing
+                          the machine
+                        items:
+                          type: string
+                        type: array
+                    required:
+                    - instanceType
+                    - network
+                    type: object
+                required:
+                - spec
+                type: object
+            required:
+            - template
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true

@@ -1,0 +1,238 @@
+---
+# Example NVIDIA Carbide Cluster with Control Plane and Workers
+# This template demonstrates a complete CAPI cluster setup
+
+# Required: Create credentials secret first
+# kubectl create secret generic nvidia-carbide-credentials \
+#   --from-literal=endpoint="https://api.carbide.nvidia.com" \
+#   --from-literal=orgName="your-org-name" \
+#   --from-literal=token="your-jwt-token" \
+#   -n default
+
+---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: nvidia-carbide-cluster-example
+  namespace: default
+spec:
+  clusterNetwork:
+    pods:
+      cidrBlocks:
+        - 10.244.0.0/16
+    services:
+      cidrBlocks:
+        - 10.96.0.0/12
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    kind: NvidiaCarbideCluster
+    name: nvidia-carbide-cluster-example
+  controlPlaneRef:
+    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+    kind: KubeadmControlPlane
+    name: nvidia-carbide-cluster-example-control-plane
+
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: NvidiaCarbideCluster
+metadata:
+  name: nvidia-carbide-cluster-example
+  namespace: default
+spec:
+  # Reference to existing Site CRD (from carbide-rest/site-manager)
+  siteRef:
+    name: my-site  # Change to your Site name
+    # Or use direct ID:
+    # id: "site-uuid-here"
+
+  # NVIDIA Carbide tenant ID for multi-tenancy
+  tenantID: "your-tenant-uuid"
+
+  # VPC configuration
+  vpc:
+    name: "nvidia-carbide-cluster-example-vpc"
+    networkVirtualizationType: "ETHERNET_VIRTUALIZER"  # or "FNN"
+    labels:
+      cluster: "nvidia-carbide-cluster-example"
+      environment: "production"
+
+    # Optional: Network Security Group
+    networkSecurityGroup:
+      name: "nvidia-carbide-cluster-example-nsg"
+      rules:
+        - name: "allow-ssh"
+          direction: "ingress"
+          protocol: "tcp"
+          portRange: "22"
+          sourceCIDR: "0.0.0.0/0"
+          action: "allow"
+        - name: "allow-k8s-api"
+          direction: "ingress"
+          protocol: "tcp"
+          portRange: "6443"
+          sourceCIDR: "0.0.0.0/0"
+          action: "allow"
+        - name: "allow-internal"
+          direction: "ingress"
+          protocol: "all"
+          sourceCIDR: "10.100.0.0/16"
+          action: "allow"
+
+  # Subnet definitions
+  subnets:
+    - name: "control-plane"
+      cidr: "10.100.1.0/24"
+      role: "control-plane"
+      labels:
+        subnet-type: "control-plane"
+    - name: "worker"
+      cidr: "10.100.2.0/24"
+      role: "worker"
+      labels:
+        subnet-type: "worker"
+
+  # Authentication credentials secret
+  authentication:
+    secretRef:
+      name: nvidia-carbide-credentials
+      namespace: default
+
+---
+apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+kind: KubeadmControlPlane
+metadata:
+  name: nvidia-carbide-cluster-example-control-plane
+  namespace: default
+spec:
+  replicas: 3
+  version: v1.28.0
+
+  machineTemplate:
+    infrastructureRef:
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+      kind: NvidiaCarbideMachineTemplate
+      name: nvidia-carbide-cluster-example-control-plane
+
+  kubeadmConfigSpec:
+    clusterConfiguration:
+      apiServer:
+        extraArgs:
+          cloud-provider: external
+      controllerManager:
+        extraArgs:
+          cloud-provider: external
+
+    initConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+          cloud-provider: external
+
+    joinConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+          cloud-provider: external
+
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: NvidiaCarbideMachineTemplate
+metadata:
+  name: nvidia-carbide-cluster-example-control-plane
+  namespace: default
+spec:
+  template:
+    spec:
+      # Instance type configuration
+      instanceType:
+        # Use instance type ID for dynamic allocation
+        id: "instance-type-uuid-here"
+        # Or use specific machine ID for targeted provisioning
+        # machineID: "machine-uuid-here"
+        # allowUnhealthyMachine: false
+
+      # Network configuration
+      network:
+        subnetName: "control-plane"
+        # Optional: Additional network interfaces for DPU connectivity
+        # additionalInterfaces:
+        #   - subnetName: "dpu-network"
+        #     isPhysical: true
+
+      # SSH key groups for access
+      sshKeyGroups:
+        - "ssh-key-group-uuid-here"
+
+      # Labels for the instance
+      labels:
+        role: "control-plane"
+        cluster: "nvidia-carbide-cluster-example"
+
+---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: MachineDeployment
+metadata:
+  name: nvidia-carbide-cluster-example-workers
+  namespace: default
+spec:
+  clusterName: nvidia-carbide-cluster-example
+  replicas: 3
+
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/cluster-name: nvidia-carbide-cluster-example
+      cluster.x-k8s.io/deployment-name: nvidia-carbide-cluster-example-workers
+
+  template:
+    metadata:
+      labels:
+        cluster.x-k8s.io/cluster-name: nvidia-carbide-cluster-example
+        cluster.x-k8s.io/deployment-name: nvidia-carbide-cluster-example-workers
+    spec:
+      clusterName: nvidia-carbide-cluster-example
+      version: v1.28.0
+
+      bootstrap:
+        configRef:
+          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+          kind: KubeadmConfigTemplate
+          name: nvidia-carbide-cluster-example-worker
+
+      infrastructureRef:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+        kind: NvidiaCarbideMachineTemplate
+        name: nvidia-carbide-cluster-example-worker
+
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: NvidiaCarbideMachineTemplate
+metadata:
+  name: nvidia-carbide-cluster-example-worker
+  namespace: default
+spec:
+  template:
+    spec:
+      instanceType:
+        id: "instance-type-uuid-here"
+
+      network:
+        subnetName: "worker"
+
+      sshKeyGroups:
+        - "ssh-key-group-uuid-here"
+
+      labels:
+        role: "worker"
+        cluster: "nvidia-carbide-cluster-example"
+
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+kind: KubeadmConfigTemplate
+metadata:
+  name: nvidia-carbide-cluster-example-worker
+  namespace: default
+spec:
+  template:
+    spec:
+      joinConfiguration:
+        nodeRegistration:
+          kubeletExtraArgs:
+            cloud-provider: external

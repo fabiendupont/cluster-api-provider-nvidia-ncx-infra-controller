@@ -1,0 +1,222 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+  name: cluster-api-provider-nvidia-carbide.v0.1.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+      - description: NvidiaCarbideCluster is the Schema for the nvidiacarbideclusters API
+        displayName: NVIDIA Carbide Cluster
+        kind: NvidiaCarbideCluster
+        name: nvidiacarbideclusters.infrastructure.cluster.x-k8s.io
+        version: v1beta1
+      - description: NvidiaCarbideMachine is the Schema for the nvidiacarbidemachines API
+        displayName: NVIDIA Carbide Machine
+        kind: NvidiaCarbideMachine
+        name: nvidiacarbidemachines.infrastructure.cluster.x-k8s.io
+        version: v1beta1
+      - description: NvidiaCarbideMachineTemplate is the Schema for the nvidiacarbidemachinetemplates API
+        displayName: NVIDIA Carbide Machine Template
+        kind: NvidiaCarbideMachineTemplate
+        name: nvidiacarbidemachinetemplates.infrastructure.cluster.x-k8s.io
+        version: v1beta1
+  description: |
+    Cluster API infrastructure provider for NVIDIA Carbide bare-metal platform.
+
+    This operator enables declarative provisioning and lifecycle management of
+    Kubernetes clusters on NVIDIA Carbide infrastructure using the Cluster API
+    standard.
+
+    ## Features
+
+    - Declarative cluster infrastructure provisioning via NvidiaCarbideCluster
+    - Machine lifecycle management via NvidiaCarbideMachine
+    - Machine templates for control plane and worker node scaling
+    - VPC, subnet, and network security group automation
+    - Integration with Cluster API controllers for full cluster lifecycle
+  displayName: Cluster API Provider NVIDIA Carbide
+  icon:
+    - base64data: ""
+      mediatype: image/svg+xml
+  install:
+    spec:
+      clusterPermissions:
+        - rules:
+            - apiGroups:
+                - ""
+              resources:
+                - secrets
+              verbs:
+                - get
+                - list
+                - watch
+            - apiGroups:
+                - cluster.x-k8s.io
+              resources:
+                - clusters
+                - machines
+              verbs:
+                - get
+                - list
+                - watch
+            - apiGroups:
+                - cluster.x-k8s.io
+              resources:
+                - machines/status
+              verbs:
+                - get
+                - patch
+                - update
+            - apiGroups:
+                - infrastructure.cluster.x-k8s.io
+              resources:
+                - nvidiacarbideclusters
+                - nvidiacarbidemachines
+              verbs:
+                - create
+                - delete
+                - get
+                - list
+                - patch
+                - update
+                - watch
+            - apiGroups:
+                - infrastructure.cluster.x-k8s.io
+              resources:
+                - nvidiacarbideclusters/finalizers
+                - nvidiacarbidemachines/finalizers
+              verbs:
+                - update
+            - apiGroups:
+                - infrastructure.cluster.x-k8s.io
+              resources:
+                - nvidiacarbideclusters/status
+                - nvidiacarbidemachines/status
+              verbs:
+                - get
+                - patch
+                - update
+          serviceAccountName: cluster-api-provider-nvidia-carbide-controller-manager
+      deployments:
+        - label:
+            control-plane: controller-manager
+            app.kubernetes.io/name: cluster-api-provider-nvidia-carbide
+          name: cluster-api-provider-nvidia-carbide-controller-manager
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                control-plane: controller-manager
+                app.kubernetes.io/name: cluster-api-provider-nvidia-carbide
+            template:
+              metadata:
+                annotations:
+                  kubectl.kubernetes.io/default-container: manager
+                labels:
+                  control-plane: controller-manager
+                  app.kubernetes.io/name: cluster-api-provider-nvidia-carbide
+              spec:
+                containers:
+                  - args:
+                      - --leader-elect
+                      - --health-probe-bind-address=:8081
+                    command:
+                      - /manager
+                    image: ghcr.io/fabiendupont/cluster-api-provider-nvidia-carbide:v0.1.0
+                    livenessProbe:
+                      httpGet:
+                        path: /healthz
+                        port: 8081
+                      initialDelaySeconds: 15
+                      periodSeconds: 20
+                    name: manager
+                    readinessProbe:
+                      httpGet:
+                        path: /readyz
+                        port: 8081
+                      initialDelaySeconds: 5
+                      periodSeconds: 10
+                    resources:
+                      limits:
+                        cpu: 500m
+                        memory: 128Mi
+                      requests:
+                        cpu: 10m
+                        memory: 64Mi
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      capabilities:
+                        drop:
+                          - ALL
+                      readOnlyRootFilesystem: true
+                securityContext:
+                  runAsNonRoot: true
+                  seccompProfile:
+                    type: RuntimeDefault
+                serviceAccountName: cluster-api-provider-nvidia-carbide-controller-manager
+                terminationGracePeriodSeconds: 10
+      permissions:
+        - rules:
+            - apiGroups:
+                - ""
+              resources:
+                - configmaps
+              verbs:
+                - get
+                - list
+                - watch
+                - create
+                - update
+                - patch
+                - delete
+            - apiGroups:
+                - coordination.k8s.io
+              resources:
+                - leases
+              verbs:
+                - get
+                - list
+                - watch
+                - create
+                - update
+                - patch
+                - delete
+            - apiGroups:
+                - ""
+              resources:
+                - events
+              verbs:
+                - create
+                - patch
+          serviceAccountName: cluster-api-provider-nvidia-carbide-controller-manager
+    strategy: deployment
+  installModes:
+    - supported: true
+      type: OwnNamespace
+    - supported: true
+      type: SingleNamespace
+    - supported: false
+      type: MultiNamespace
+    - supported: true
+      type: AllNamespaces
+  keywords:
+    - cluster-api
+    - nvidia
+    - carbide
+    - bare-metal
+    - kubernetes
+    - infrastructure
+  links:
+    - name: Source Code
+      url: https://github.com/fabiendupont/cluster-api-provider-nvidia-carbide
+  maintainers:
+    - email: fdupont@nvidia.com
+      name: Fabien Dupont
+  maturity: alpha
+  provider:
+    name: NVIDIA
+  version: 0.1.0
