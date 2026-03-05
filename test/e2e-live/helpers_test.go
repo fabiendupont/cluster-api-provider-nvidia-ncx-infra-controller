@@ -19,6 +19,7 @@ limitations under the License.
 package e2e_live
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -130,4 +131,57 @@ func waitForMachineReady(ctx context.Context, k8sClient client.Client, machine *
 			machine.Status.Ready, machine.Status.InstanceID, machine.Status.InstanceState)
 		return machine.Status.Ready
 	}, clusterCreationTimeout, pollInterval).Should(BeTrue(), "NvidiaCarbideMachine did not become ready")
+}
+
+// carbideAPIRequest makes an authenticated request to the Carbide REST API.
+func carbideAPIRequest(method, path, token string, body interface{}) (map[string]interface{}, int) {
+	endpoint := os.Getenv("NVIDIA_CARBIDE_API_ENDPOINT")
+	Expect(endpoint).NotTo(BeEmpty())
+
+	var reqBody io.Reader
+	if body != nil {
+		jsonBytes, err := json.Marshal(body)
+		Expect(err).NotTo(HaveOccurred())
+		reqBody = bytes.NewReader(jsonBytes)
+	}
+
+	req, err := http.NewRequest(method, endpoint+path, reqBody)
+	Expect(err).NotTo(HaveOccurred())
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	Expect(err).NotTo(HaveOccurred())
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	Expect(err).NotTo(HaveOccurred())
+
+	var result map[string]interface{}
+	if len(respBody) > 0 {
+		_ = json.Unmarshal(respBody, &result)
+	}
+
+	_, _ = fmt.Fprintf(GinkgoWriter, "%s %s -> %d\n", method, path, resp.StatusCode)
+	return result, resp.StatusCode
+}
+
+// createSiteViaAPI creates a site via the Carbide REST API and returns its ID.
+func createSiteViaAPI(token, orgName, name string) string {
+	body := map[string]interface{}{
+		"name":        name,
+		"displayName": name,
+	}
+	result, status := carbideAPIRequest("POST", fmt.Sprintf("/v2/org/%s/carbide/site", orgName), token, body)
+	Expect(status).To(Equal(http.StatusCreated), "Failed to create site: %v", result)
+	siteID, ok := result["id"].(string)
+	Expect(ok).To(BeTrue(), "Site response missing id")
+	_, _ = fmt.Fprintf(GinkgoWriter, "Created site %s (id=%s)\n", name, siteID)
+	return siteID
+}
+
+// deleteSiteViaAPI deletes a site via the Carbide REST API.
+func deleteSiteViaAPI(token, orgName, siteID string) {
+	carbideAPIRequest("DELETE", fmt.Sprintf("/v2/org/%s/carbide/site/%s", orgName, siteID), token, nil)
 }
