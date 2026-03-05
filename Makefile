@@ -104,6 +104,11 @@ test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expect
 cleanup-test-e2e: ## Tear down the Kind cluster used for e2e tests
 	@$(KIND) delete cluster --name $(KIND_CLUSTER)
 
+.PHONY: test-e2e-live
+test-e2e-live: manifests generate ## Run e2e tests against live Carbide API.
+	KUBECONFIG=$$(kind get kubeconfig --name carbide-rest-local) \
+		go test -tags=e2e ./test/e2e/ -v -ginkgo.v -ginkgo.label-filter="live"
+
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
 	"$(GOLANGCI_LINT)" run
