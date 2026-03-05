@@ -48,6 +48,33 @@ jobs:
           kind load docker-image localhost/cluster-api-provider-nvidia-carbide:e2e \
             --name carbide-rest-local
 
+      - name: Install cert-manager
+        run: |
+          kind get kubeconfig --name carbide-rest-local > /tmp/carbide-e2e-kubeconfig
+          KUBECONFIG=/tmp/carbide-e2e-kubeconfig kubectl apply \
+            -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.4/cert-manager.yaml
+          KUBECONFIG=/tmp/carbide-e2e-kubeconfig kubectl wait \
+            --for=condition=Available deployment/cert-manager-webhook \
+            -n cert-manager --timeout=5m
+
+      - name: Install Cluster API core components
+        run: |
+          KUBECONFIG=/tmp/carbide-e2e-kubeconfig kubectl apply \
+            -f https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.12.1/core-components.yaml
+          KUBECONFIG=/tmp/carbide-e2e-kubeconfig kubectl wait \
+            --for=condition=Available deployment/capi-controller-manager \
+            -n capi-system --timeout=5m
+
+      - name: Install provider CRDs and deploy controller
+        run: |
+          KUBECONFIG=/tmp/carbide-e2e-kubeconfig make install
+          KUBECONFIG=/tmp/carbide-e2e-kubeconfig make deploy \
+            IMG=localhost/cluster-api-provider-nvidia-carbide:e2e
+          KUBECONFIG=/tmp/carbide-e2e-kubeconfig kubectl wait \
+            --for=condition=Available deployment \
+            -l control-plane=controller-manager \
+            -n cluster-api-provider-nvidia-carbide-system --timeout=5m
+
       - name: Run e2e tests
         run: make test-e2e-live
         env:
