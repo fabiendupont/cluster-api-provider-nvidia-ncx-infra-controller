@@ -262,8 +262,6 @@ var _ = Describe("Live NVIDIA Carbide Cluster E2E", Label("live"), func() {
 			Expect(k8sClient.Delete(ctx, secret)).To(Succeed())
 			Expect(k8sClient.Delete(ctx, bootstrapSecret)).To(Succeed())
 
-			By("Cleaning up site via Carbide API")
-			cleanupSiteViaAPI(token, "test-org", siteID)
 		})
 	})
 })
