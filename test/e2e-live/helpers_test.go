@@ -259,6 +259,7 @@ func setupSiteViaAPI(token, orgName, prefix string) (siteID, tenantID, machineID
 	Expect(tStatus).To(Equal(http.StatusOK), "Failed to get current tenant: %v", currentTenant)
 	tenantID = currentTenant["id"].(string)
 	_, _ = fmt.Fprintf(GinkgoWriter, "Tenant ID: %s\n", tenantID)
+	enableTargetedInstanceCreation(tenantID)
 
 
 	// Create IP Block
