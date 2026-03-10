@@ -159,6 +159,18 @@ func (r *NvidiaCarbideClusterReconciler) reconcileNormal(
 		return ctrl.Result{}, err
 	}
 
+	// Ensure IP block and allocation exist before VPC creation
+	// (the tenant must have an allocation with the site to create VPCs)
+	if _, err := r.ensureIPBlockAndAllocation(ctx, clusterScope, siteID); err != nil {
+		conditions.Set(clusterScope.NvidiaCarbideCluster, metav1.Condition{
+			Type:    string(SubnetsReadyCondition),
+			Status:  metav1.ConditionFalse,
+			Reason:  "AllocationFailed",
+			Message: err.Error(),
+		})
+		return ctrl.Result{}, err
+	}
+
 	// Reconcile VPC
 	if err := r.reconcileVPC(ctx, clusterScope, siteID); err != nil {
 		conditions.Set(clusterScope.NvidiaCarbideCluster, metav1.Condition{
