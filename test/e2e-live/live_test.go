@@ -116,11 +116,21 @@ var _ = Describe("Live NVIDIA Carbide Cluster E2E", Label("live"), func() {
 			}
 			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 
-			By("Creating NvidiaCarbideCluster")
+			By("Creating NvidiaCarbideCluster with owner reference to Cluster")
+			// The CAPI controller normally sets the OwnerRef, but since we're not
+			// running the CAPI controller, we set it manually.
 			nvidiaCarbideCluster := &infrastructurev1beta1.NvidiaCarbideCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      clusterName,
 					Namespace: testNamespace,
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: clusterv1.GroupVersion.String(),
+							Kind:       "Cluster",
+							Name:       cluster.Name,
+							UID:        cluster.UID,
+						},
+					},
 				},
 				Spec: infrastructurev1beta1.NvidiaCarbideClusterSpec{
 					SiteRef: infrastructurev1beta1.SiteReference{
