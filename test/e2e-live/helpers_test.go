@@ -271,25 +271,8 @@ func setupSiteViaAPI(token, orgName, prefix string) (siteID, tenantID, machineID
 	_, _ = fmt.Fprintf(GinkgoWriter, "Tenant ID: %s\n", tenantID)
 	enableTargetedInstanceCreation(tenantID)
 
-
-	// Create IP Block
-	ipBlockResult, status := carbideAPIRequest("POST", apiBase+"/ipblock", token, map[string]interface{}{
-		"name": prefix + "-ipblock", "siteId": siteID,
-		"prefix": "10.0.0.0", "prefixLength": 16, "protocolVersion": "IPv4", "routingType": "Public",
-	})
-	Expect(status).To(Equal(http.StatusCreated), "Failed to create IP block: %v", ipBlockResult)
-	ipBlockID := ipBlockResult["id"].(string)
-
-	// Create Allocation for IPBlock
-	allocResult, status := carbideAPIRequest("POST", apiBase+"/allocation", token, map[string]interface{}{
-		"name":     prefix + "-allocation",
-		"tenantId": tenantID,
-		"siteId":   siteID,
-		"allocationConstraints": []map[string]interface{}{
-			{"resourceType": "IPBlock", "resourceTypeId": ipBlockID, "constraintType": "OnDemand", "constraintValue": 24},
-		},
-	})
-	Expect(status).To(Equal(http.StatusCreated), "Failed to create allocation: %v", allocResult)
+	// Note: IP block and allocation are created by the cluster controller
+	// in ensureIPBlockAndAllocation(). We only need the test machine here.
 
 	// Create a test machine in DB (mock-core doesn't persist machines)
 	infraProviderID := getInfraProviderID(token, orgName)
