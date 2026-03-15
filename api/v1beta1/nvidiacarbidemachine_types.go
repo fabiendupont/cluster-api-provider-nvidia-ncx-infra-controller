@@ -19,7 +19,7 @@ package v1beta1
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
-	capierrors "sigs.k8s.io/cluster-api/errors"
+	capierrors "sigs.k8s.io/cluster-api/errors" //nolint:staticcheck // required for CAPI contract FailureReason types
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -55,6 +55,10 @@ type NvidiaCarbideMachineSpec struct {
 	// NVLinkInterfaces specifies NVLink logical partition attachments
 	// +optional
 	NVLinkInterfaces []NVLinkInterfaceSpec `json:"nvlinkInterfaces,omitempty"`
+
+	// DPUExtensionServices specifies DPU extension services to deploy on the instance
+	// +optional
+	DPUExtensionServices []DPUExtensionServiceSpec `json:"dpuExtensionServices,omitempty"`
 
 	// Labels to apply to the NVIDIA Carbide instance
 	// +optional
@@ -105,6 +109,17 @@ type NVLinkInterfaceSpec struct {
 	DeviceInstance *int32 `json:"deviceInstance,omitempty"`
 }
 
+// DPUExtensionServiceSpec defines a DPU extension service deployment
+type DPUExtensionServiceSpec struct {
+	// ServiceID is the DPU extension service UUID
+	// +required
+	ServiceID string `json:"serviceID"`
+
+	// Version specifies the service version to deploy
+	// +optional
+	Version string `json:"version,omitempty"`
+}
+
 // InstanceTypeSpec specifies the instance type or specific machine allocation
 type InstanceTypeSpec struct {
 	// ID specifies the NVIDIA Carbide instance type UUID
@@ -139,9 +154,15 @@ type OSSpec struct {
 
 // NetworkSpec defines network configuration for the machine
 type NetworkSpec struct {
-	// SubnetName specifies the subnet to attach the machine to
-	// +required
-	SubnetName string `json:"subnetName"`
+	// SubnetName specifies the subnet to attach the machine to.
+	// Mutually exclusive with VPCPrefixName.
+	// +optional
+	SubnetName string `json:"subnetName,omitempty"`
+
+	// VPCPrefixName specifies the VPC Prefix to attach the machine to (physical interface).
+	// Mutually exclusive with SubnetName.
+	// +optional
+	VPCPrefixName string `json:"vpcPrefixName,omitempty"`
 
 	// AdditionalInterfaces for multi-NIC configurations
 	// +optional
@@ -150,9 +171,15 @@ type NetworkSpec struct {
 
 // NetworkInterface defines an additional network interface
 type NetworkInterface struct {
-	// SubnetName specifies the subnet for this interface
-	// +required
-	SubnetName string `json:"subnetName"`
+	// SubnetName specifies the subnet for this interface.
+	// Mutually exclusive with VPCPrefixName.
+	// +optional
+	SubnetName string `json:"subnetName,omitempty"`
+
+	// VPCPrefixName specifies the VPC Prefix for this interface (physical interface).
+	// Mutually exclusive with SubnetName.
+	// +optional
+	VPCPrefixName string `json:"vpcPrefixName,omitempty"`
 
 	// IsPhysical indicates if this is a physical interface
 	// +optional

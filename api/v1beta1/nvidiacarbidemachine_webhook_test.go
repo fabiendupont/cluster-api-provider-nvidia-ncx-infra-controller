@@ -75,12 +75,66 @@ func TestMachineWebhook_MachineIDOnly(t *testing.T) {
 	}
 }
 
-func TestMachineWebhook_EmptySubnetName(t *testing.T) {
+func TestMachineWebhook_EmptyNetworkNames(t *testing.T) {
 	m := validMachine()
 	m.Spec.Network.SubnetName = ""
+	m.Spec.Network.VPCPrefixName = ""
 	_, err := m.ValidateCreate(context.Background(), m)
 	if err == nil {
-		t.Error("expected error for empty subnet name")
+		t.Error("expected error when neither subnet nor VPC prefix is set")
+	}
+}
+
+func TestMachineWebhook_BothNetworkNames(t *testing.T) {
+	m := validMachine()
+	m.Spec.Network.SubnetName = "subnet"
+	m.Spec.Network.VPCPrefixName = "prefix"
+	_, err := m.ValidateCreate(context.Background(), m)
+	if err == nil {
+		t.Error("expected error when both subnet and VPC prefix are set")
+	}
+}
+
+func TestMachineWebhook_VPCPrefixOnly(t *testing.T) {
+	m := validMachine()
+	m.Spec.Network.SubnetName = ""
+	m.Spec.Network.VPCPrefixName = "my-prefix"
+	_, err := m.ValidateCreate(context.Background(), m)
+	if err != nil {
+		t.Errorf("expected no error for VPC prefix only, got %v", err)
+	}
+}
+
+func TestMachineWebhook_DPUExtensionEmptyServiceID(t *testing.T) {
+	m := validMachine()
+	m.Spec.DPUExtensionServices = []DPUExtensionServiceSpec{
+		{ServiceID: ""},
+	}
+	_, err := m.ValidateCreate(context.Background(), m)
+	if err == nil {
+		t.Error("expected error for empty DPU extension service ID")
+	}
+}
+
+func TestMachineWebhook_ValidDPUExtension(t *testing.T) {
+	m := validMachine()
+	m.Spec.DPUExtensionServices = []DPUExtensionServiceSpec{
+		{ServiceID: "dpu-service-uuid", Version: "1.0"},
+	}
+	_, err := m.ValidateCreate(context.Background(), m)
+	if err != nil {
+		t.Errorf("expected no error for valid DPU extension, got %v", err)
+	}
+}
+
+func TestMachineWebhook_AdditionalIfaceMutualExclusion(t *testing.T) {
+	m := validMachine()
+	m.Spec.Network.AdditionalInterfaces = []NetworkInterface{
+		{SubnetName: "s1", VPCPrefixName: "p1"},
+	}
+	_, err := m.ValidateCreate(context.Background(), m)
+	if err == nil {
+		t.Error("expected error for additional interface with both subnet and VPC prefix")
 	}
 }
 

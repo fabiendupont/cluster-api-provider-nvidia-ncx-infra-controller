@@ -233,6 +233,19 @@ func (s *MachineScope) GetSubnetID() (string, error) {
 	return subnetID, nil
 }
 
+// GetVPCPrefixID returns the VPC Prefix ID for the machine's network
+func (s *MachineScope) GetVPCPrefixID() (string, error) {
+	prefixName := s.NvidiaCarbideMachine.Spec.Network.VPCPrefixName
+
+	vpcPrefixIDs := s.NvidiaCarbideCluster.Status.NetworkStatus.VPCPrefixIDs
+	prefixID, ok := vpcPrefixIDs[prefixName]
+	if !ok {
+		return "", fmt.Errorf("VPC prefix %s not found in cluster status", prefixName)
+	}
+
+	return prefixID, nil
+}
+
 // VPCID returns the VPC ID from the cluster
 func (s *MachineScope) VPCID() string {
 	return s.NvidiaCarbideCluster.Status.VPCID

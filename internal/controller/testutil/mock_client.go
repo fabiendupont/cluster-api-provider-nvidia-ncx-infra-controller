@@ -127,6 +127,17 @@ type MockCarbideClient struct {
 	BatchCreateInstanceFunc func(
 		ctx context.Context, org string, req bmm.BatchInstanceCreateRequest,
 	) ([]bmm.Instance, *http.Response, error)
+
+	// VPC Prefix methods
+	CreateVpcPrefixFunc func(
+		ctx context.Context, org string, req bmm.VpcPrefixCreateRequest,
+	) (*bmm.VpcPrefix, *http.Response, error)
+	GetVpcPrefixFunc func(
+		ctx context.Context, org string, vpcPrefixId string,
+	) (*bmm.VpcPrefix, *http.Response, error)
+	DeleteVpcPrefixFunc func(
+		ctx context.Context, org string, vpcPrefixId string,
+	) (*http.Response, error)
 }
 
 // VPC methods
@@ -368,6 +379,34 @@ func (m *MockCarbideClient) BatchCreateInstance(
 		return m.BatchCreateInstanceFunc(ctx, org, req)
 	}
 	return nil, nil, nil
+}
+
+// VPC Prefix methods
+func (m *MockCarbideClient) CreateVpcPrefix(
+	ctx context.Context, org string, req bmm.VpcPrefixCreateRequest,
+) (*bmm.VpcPrefix, *http.Response, error) {
+	if m.CreateVpcPrefixFunc != nil {
+		return m.CreateVpcPrefixFunc(ctx, org, req)
+	}
+	return nil, nil, nil
+}
+
+func (m *MockCarbideClient) GetVpcPrefix(
+	ctx context.Context, org string, vpcPrefixId string,
+) (*bmm.VpcPrefix, *http.Response, error) {
+	if m.GetVpcPrefixFunc != nil {
+		return m.GetVpcPrefixFunc(ctx, org, vpcPrefixId)
+	}
+	return nil, nil, nil
+}
+
+func (m *MockCarbideClient) DeleteVpcPrefix(
+	ctx context.Context, org string, vpcPrefixId string,
+) (*http.Response, error) {
+	if m.DeleteVpcPrefixFunc != nil {
+		return m.DeleteVpcPrefixFunc(ctx, org, vpcPrefixId)
+	}
+	return nil, nil
 }
 
 // Helper functions to create common response objects

@@ -21,9 +21,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"strconv"
 	"strings"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -31,7 +29,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
-	capierrors "sigs.k8s.io/cluster-api/errors"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/conditions"
@@ -61,6 +58,9 @@ const (
 	NSGReadyCondition        clusterv1.ConditionType = "NSGReady"
 	AllocationReadyCondition clusterv1.ConditionType = "AllocationReady"
 )
+
+// resourceTypeIPBlock is the Carbide allocation resource type for IP blocks.
+const resourceTypeIPBlock = "IPBlock"
 
 // NvidiaCarbideClusterReconciler reconciles a NvidiaCarbideCluster object
 type NvidiaCarbideClusterReconciler struct {
@@ -217,6 +217,19 @@ func (r *NvidiaCarbideClusterReconciler) reconcileNormal(
 		Reason: "SubnetsReady",
 	})
 
+	// Reconcile VPC Prefixes (if specified, for FNN VPCs)
+	if len(clusterScope.NvidiaCarbideCluster.Spec.VPCPrefixes) > 0 {
+		if err := r.reconcileVPCPrefixes(ctx, clusterScope, siteID); err != nil {
+			conditions.Set(clusterScope.NvidiaCarbideCluster, metav1.Condition{
+				Type:    string(SubnetsReadyCondition),
+				Status:  metav1.ConditionFalse,
+				Reason:  "VPCPrefixReconcileFailed",
+				Message: err.Error(),
+			})
+			return ctrl.Result{}, err
+		}
+	}
+
 	// Reconcile Network Security Group (if specified)
 	if clusterScope.NvidiaCarbideCluster.Spec.VPC.NetworkSecurityGroup != nil {
 		if err := r.reconcileNSG(ctx, clusterScope, siteID); err != nil {
@@ -243,7 +256,7 @@ func (r *NvidiaCarbideClusterReconciler) reconcileNormal(
 		Reason: "NvidiaCarbideClusterReady",
 	})
 
-	r.recordEvent(clusterScope.NvidiaCarbideCluster, corev1.EventTypeNormal, "ClusterInfrastructureReady",
+	r.recordEvent(clusterScope.NvidiaCarbideCluster, "ClusterInfrastructureReady",
 		"Cluster infrastructure is ready")
 	logger.Info("Successfully reconciled NvidiaCarbideCluster")
 	return ctrl.Result{}, nil
@@ -310,27 +323,21 @@ func (r *NvidiaCarbideClusterReconciler) reconcileVPC(
 
 	clusterScope.SetVPCID(*vpc.Id)
 	logger.Info("Successfully created VPC", "vpcID", *vpc.Id)
-	r.recordEvent(clusterScope.NvidiaCarbideCluster, corev1.EventTypeNormal, "VPCCreated",
+	r.recordEvent(clusterScope.NvidiaCarbideCluster, "VPCCreated",
 		"Successfully created VPC %s", *vpc.Id)
 	carbidemetrics.VPCCount.WithLabelValues(siteID).Inc()
 
 	return nil
 }
 
-// parseCIDR parses a CIDR string and returns the network address and prefix length
-func parseCIDR(cidr string) (network string, prefixLength int, err error) {
+// parseCIDR parses a CIDR string and returns the prefix length.
+func parseCIDR(cidr string) (prefixLength int, err error) {
 	_, ipNet, err := net.ParseCIDR(cidr)
 	if err != nil {
-		return "", 0, fmt.Errorf("invalid CIDR %s: %w", cidr, err)
+		return 0, fmt.Errorf("invalid CIDR %s: %w", cidr, err)
 	}
-
-	// Get prefix length
 	ones, _ := ipNet.Mask.Size()
-
-	// Return the network address (not the host part)
-	networkAddr := ipNet.IP.String()
-
-	return networkAddr, ones, nil
+	return ones, nil
 }
 
 // ensureIPBlockAndAllocation ensures an IP block and allocation exist for subnet allocation.
@@ -386,7 +393,7 @@ func (r *NvidiaCarbideClusterReconciler) ensureIPBlockAndAllocation(
 	// Step 2: Create allocation to link tenant to IP block (creates child IP block)
 	if clusterScope.AllocationID() == "" {
 		allocName := fmt.Sprintf("%s-allocation", clusterScope.NvidiaCarbideCluster.Name)
-		resourceType := "IPBlock"
+		resourceType := resourceTypeIPBlock
 		allocReq := bmm.AllocationCreateRequest{
 			Name:     allocName,
 			TenantId: clusterScope.TenantID(),
@@ -460,7 +467,7 @@ func (r *NvidiaCarbideClusterReconciler) extractChildIPBlockID(
 	clusterScope *scope.ClusterScope, alloc *bmm.Allocation,
 ) {
 	for _, ac := range alloc.AllocationConstraints {
-		if ac.ResourceType != nil && *ac.ResourceType == "IPBlock" {
+		if ac.ResourceType != nil && *ac.ResourceType == resourceTypeIPBlock {
 			if derivedID := ac.DerivedResourceId.Get(); derivedID != nil {
 				clusterScope.SetChildIPBlockID(*derivedID)
 				break
@@ -522,7 +529,7 @@ func (r *NvidiaCarbideClusterReconciler) reconcileSubnets(
 		}
 
 		// Parse CIDR to get prefix length
-		_, prefixLength, err := parseCIDR(subnetSpec.CIDR)
+		prefixLength, err := parseCIDR(subnetSpec.CIDR)
 		if err != nil {
 			return fmt.Errorf("failed to parse CIDR for subnet %s: %w", subnetSpec.Name, err)
 		}
@@ -554,8 +561,77 @@ func (r *NvidiaCarbideClusterReconciler) reconcileSubnets(
 
 		clusterScope.SetSubnetID(subnetSpec.Name, *subnet.Id)
 		logger.Info("Successfully created subnet", "subnetName", subnetSpec.Name, "subnetID", *subnet.Id)
-		r.recordEvent(clusterScope.NvidiaCarbideCluster, corev1.EventTypeNormal, "SubnetCreated",
+		r.recordEvent(clusterScope.NvidiaCarbideCluster, "SubnetCreated",
 			"Successfully created subnet %s (%s)", subnetSpec.Name, *subnet.Id)
+	}
+
+	return nil
+}
+
+func (r *NvidiaCarbideClusterReconciler) reconcileVPCPrefixes(
+	ctx context.Context, clusterScope *scope.ClusterScope, siteID string,
+) error {
+	logger := log.FromContext(ctx)
+
+	vpcID := clusterScope.VPCID()
+	if vpcID == "" {
+		return fmt.Errorf("VPC ID is empty")
+	}
+
+	// Ensure IP block and allocation exist (creates child IP block for tenant)
+	childIPBlockID, err := r.ensureIPBlockAndAllocation(ctx, clusterScope, siteID)
+	if err != nil {
+		return fmt.Errorf("failed to ensure IP block and allocation: %w", err)
+	}
+
+	vpcPrefixIDs := clusterScope.VPCPrefixIDs()
+
+	for _, prefixSpec := range clusterScope.NvidiaCarbideCluster.Spec.VPCPrefixes {
+		// Check if VPC Prefix already exists
+		if existingID, exists := vpcPrefixIDs[prefixSpec.Name]; exists {
+			prefix, _, err := clusterScope.NvidiaCarbideClient.GetVpcPrefix(ctx, clusterScope.OrgName, existingID)
+			if err != nil || prefix == nil {
+				logger.Error(err, "VPC Prefix not found, will recreate",
+					"prefixName", prefixSpec.Name, "prefixID", existingID)
+				delete(vpcPrefixIDs, prefixSpec.Name)
+			} else {
+				logger.V(1).Info("VPC Prefix already exists", "prefixName", prefixSpec.Name, "prefixID", existingID)
+				continue
+			}
+		}
+
+		prefixLength, err := parseCIDR(prefixSpec.CIDR)
+		if err != nil {
+			return fmt.Errorf("failed to parse CIDR for VPC prefix %s: %w", prefixSpec.Name, err)
+		}
+
+		prefixReq := bmm.VpcPrefixCreateRequest{
+			Name:         prefixSpec.Name,
+			VpcId:        vpcID,
+			IpBlockId:    &childIPBlockID,
+			PrefixLength: int32(prefixLength),
+		}
+
+		logger.Info("Creating VPC Prefix",
+			"name", prefixSpec.Name, "cidr", prefixSpec.CIDR,
+			"prefixLength", prefixLength, "vpcID", vpcID)
+		prefix, httpResp, err := clusterScope.NvidiaCarbideClient.CreateVpcPrefix(ctx, clusterScope.OrgName, prefixReq)
+		if err != nil {
+			return fmt.Errorf("failed to create VPC prefix %s: %w", prefixSpec.Name, err)
+		}
+
+		if httpResp.StatusCode != http.StatusCreated {
+			return fmt.Errorf("failed to create VPC prefix %s, status %d", prefixSpec.Name, httpResp.StatusCode)
+		}
+
+		if prefix == nil || prefix.Id == nil {
+			return fmt.Errorf("VPC prefix ID missing in response for %s", prefixSpec.Name)
+		}
+
+		clusterScope.SetVPCPrefixID(prefixSpec.Name, *prefix.Id)
+		logger.Info("Successfully created VPC Prefix", "prefixName", prefixSpec.Name, "prefixID", *prefix.Id)
+		r.recordEvent(clusterScope.NvidiaCarbideCluster, "VPCPrefixCreated",
+			"Successfully created VPC Prefix %s (%s)", prefixSpec.Name, *prefix.Id)
 	}
 
 	return nil
@@ -637,7 +713,7 @@ func (r *NvidiaCarbideClusterReconciler) reconcileNSG(
 
 	clusterScope.SetNSGID(*nsg.Id)
 	logger.Info("Successfully created NSG", "nsgID", *nsg.Id)
-	r.recordEvent(clusterScope.NvidiaCarbideCluster, corev1.EventTypeNormal, "NSGCreated",
+	r.recordEvent(clusterScope.NvidiaCarbideCluster, "NSGCreated",
 		"Successfully created NSG %s", *nsg.Id)
 
 	return nil
@@ -658,6 +734,16 @@ func (r *NvidiaCarbideClusterReconciler) reconcileDelete(
 			return ctrl.Result{}, err
 		}
 		clusterScope.SetNSGID("")
+	}
+
+	// Delete VPC Prefixes
+	for prefixName, prefixID := range clusterScope.VPCPrefixIDs() {
+		logger.Info("Deleting VPC Prefix", "prefixName", prefixName, "prefixID", prefixID)
+		if err := r.deleteResource(ctx, clusterScope, "VPC prefix", prefixID,
+			clusterScope.NvidiaCarbideClient.DeleteVpcPrefix); err != nil {
+			return ctrl.Result{}, err
+		}
+		delete(clusterScope.VPCPrefixIDs(), prefixName)
 	}
 
 	// Delete Subnets
@@ -740,61 +826,11 @@ func (r *NvidiaCarbideClusterReconciler) deleteResource(
 	return nil
 }
 
-// recordEvent records an event on the given object if a Recorder is set.
-func (r *NvidiaCarbideClusterReconciler) recordEvent(obj runtime.Object, eventType, reason, messageFmt string, args ...interface{}) {
+// recordEvent records a Normal event on the given object if a Recorder is set.
+func (r *NvidiaCarbideClusterReconciler) recordEvent(obj runtime.Object, reason, messageFmt string, args ...interface{}) {
 	if r.Recorder != nil {
-		r.Recorder.Eventf(obj, eventType, reason, messageFmt, args...)
+		r.Recorder.Eventf(obj, corev1.EventTypeNormal, reason, messageFmt, args...)
 	}
-}
-
-// classifyError classifies an HTTP response and returns an appropriate requeue result.
-func classifyError(httpResp *http.Response, err error) (ctrl.Result, error) {
-	if httpResp == nil {
-		carbidemetrics.APIErrors.WithLabelValues("unknown", "network_error").Inc()
-		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
-	}
-	if httpResp.StatusCode >= 400 {
-		carbidemetrics.APIErrors.WithLabelValues("unknown", strconv.Itoa(httpResp.StatusCode)).Inc()
-	}
-	switch httpResp.StatusCode {
-	case 400, 422:
-		return ctrl.Result{}, err
-	case 401, 403:
-		return ctrl.Result{}, err
-	case 404:
-		return ctrl.Result{}, nil
-	case 409:
-		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
-	case 429:
-		retryAfter := parseRetryAfter(httpResp)
-		return ctrl.Result{RequeueAfter: retryAfter}, nil
-	default:
-		if httpResp.StatusCode >= 500 {
-			return ctrl.Result{RequeueAfter: 30 * time.Second}, err
-		}
-		return ctrl.Result{}, err
-	}
-}
-
-// parseRetryAfter extracts the Retry-After header value from an HTTP response.
-func parseRetryAfter(resp *http.Response) time.Duration {
-	if resp == nil {
-		return 30 * time.Second
-	}
-	retryAfter := resp.Header.Get("Retry-After")
-	if retryAfter == "" {
-		return 30 * time.Second
-	}
-	if seconds, err := strconv.Atoi(retryAfter); err == nil {
-		return time.Duration(seconds) * time.Second
-	}
-	return 30 * time.Second
-}
-
-// setClusterFailure sets the FailureReason and FailureMessage on the cluster status.
-func setClusterFailure(cluster *infrastructurev1.NvidiaCarbideCluster, reason capierrors.ClusterStatusError, message string) {
-	cluster.Status.FailureReason = &reason
-	cluster.Status.FailureMessage = &message
 }
 
 // SetupWithManager sets up the controller with the Manager.

@@ -77,11 +77,41 @@ func (r *NvidiaCarbideMachine) validateMachine() field.ErrorList {
 			"one of id or machineID must be specified"))
 	}
 
-	// Validate primary subnet name
-	if r.Spec.Network.SubnetName == "" {
+	// Validate primary network interface: exactly one of SubnetName or VPCPrefixName
+	if r.Spec.Network.SubnetName == "" && r.Spec.Network.VPCPrefixName == "" {
 		allErrs = append(allErrs, field.Required(
-			specPath.Child("network", "subnetName"),
-			"primary subnet name must not be empty"))
+			specPath.Child("network"),
+			"one of subnetName or vpcPrefixName must be specified"))
+	}
+	if r.Spec.Network.SubnetName != "" && r.Spec.Network.VPCPrefixName != "" {
+		allErrs = append(allErrs, field.Forbidden(
+			specPath.Child("network"),
+			"subnetName and vpcPrefixName are mutually exclusive"))
+	}
+
+	// Validate additional interfaces: each must have exactly one of SubnetName or VPCPrefixName
+	for i, iface := range r.Spec.Network.AdditionalInterfaces {
+		ifacePath := specPath.Child("network", "additionalInterfaces").Index(i)
+		if iface.SubnetName == "" && iface.VPCPrefixName == "" {
+			allErrs = append(allErrs, field.Required(
+				ifacePath,
+				"one of subnetName or vpcPrefixName must be specified"))
+		}
+		if iface.SubnetName != "" && iface.VPCPrefixName != "" {
+			allErrs = append(allErrs, field.Forbidden(
+				ifacePath,
+				"subnetName and vpcPrefixName are mutually exclusive"))
+		}
+	}
+
+	// Validate DPU extension services
+	for i, dpuSpec := range r.Spec.DPUExtensionServices {
+		dpuPath := specPath.Child("dpuExtensionServices").Index(i)
+		if dpuSpec.ServiceID == "" {
+			allErrs = append(allErrs, field.Required(
+				dpuPath.Child("serviceID"),
+				"DPU extension service ID must not be empty"))
+		}
 	}
 
 	// Validate InfiniBand interfaces

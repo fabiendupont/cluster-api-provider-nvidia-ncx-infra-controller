@@ -20,7 +20,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
-	capierrors "sigs.k8s.io/cluster-api/errors"
+	capierrors "sigs.k8s.io/cluster-api/errors" //nolint:staticcheck // required for CAPI contract FailureReason types
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -44,6 +44,10 @@ type NvidiaCarbideClusterSpec struct {
 	// +kubebuilder:validation:MinItems=1
 	// +required
 	Subnets []SubnetSpec `json:"subnets"`
+
+	// VPCPrefixes for physical interface allocations (alternative to Subnets for FNN VPCs)
+	// +optional
+	VPCPrefixes []VPCPrefixSpec `json:"vpcPrefixes,omitempty"`
 
 	// ControlPlaneEndpoint represents the endpoint used to communicate with the control plane
 	// +optional
@@ -165,6 +169,23 @@ type SubnetSpec struct {
 	Labels map[string]string `json:"labels,omitempty"`
 }
 
+// VPCPrefixSpec defines a VPC Prefix configuration (physical interface alternative to subnets)
+type VPCPrefixSpec struct {
+	// Name of the VPC Prefix
+	// +kubebuilder:validation:MaxLength=63
+	// +required
+	Name string `json:"name"`
+
+	// CIDR block for the VPC Prefix
+	// +required
+	CIDR string `json:"cidr"`
+
+	// Role of the VPC Prefix (control-plane or worker)
+	// +kubebuilder:validation:Enum=control-plane;worker
+	// +optional
+	Role string `json:"role,omitempty"`
+}
+
 // AuthenticationSpec contains credentials for NVIDIA Carbide API
 type AuthenticationSpec struct {
 	// SecretRef references a Secret containing NVIDIA Carbide credentials
@@ -209,6 +230,10 @@ type NetworkStatus struct {
 	// SubnetIDs maps subnet names to their IDs
 	// +optional
 	SubnetIDs map[string]string `json:"subnetIDs,omitempty"`
+
+	// VPCPrefixIDs maps VPC Prefix names to their IDs
+	// +optional
+	VPCPrefixIDs map[string]string `json:"vpcPrefixIDs,omitempty"`
 
 	// NSGID is the Network Security Group ID
 	// +optional

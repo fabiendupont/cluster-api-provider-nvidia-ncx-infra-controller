@@ -140,6 +140,9 @@ spec:
                       vpc:
                         description: VPC configuration for the cluster network
                         properties:
+                          description:
+                            description: Description for the VPC
+                            type: string
                           labels:
                             additionalProperties:
                               type: string
@@ -214,10 +217,44 @@ spec:
                             - ETHERNET_VIRTUALIZER
                             - FNN
                             type: string
+                          nvLinkLogicalPartitionId:
+                            description: NVLinkLogicalPartitionID attaches an NVLink
+                              logical partition at the VPC level
+                            type: string
+                          vni:
+                            description: Vni specifies an explicit VNI for the VPC
+                            format: int32
+                            type: integer
                         required:
                         - name
                         - networkVirtualizationType
                         type: object
+                      vpcPrefixes:
+                        description: VPCPrefixes for physical interface allocations
+                          (alternative to Subnets for FNN VPCs)
+                        items:
+                          description: VPCPrefixSpec defines a VPC Prefix configuration
+                            (physical interface alternative to subnets)
+                          properties:
+                            cidr:
+                              description: CIDR block for the VPC Prefix
+                              type: string
+                            name:
+                              description: Name of the VPC Prefix
+                              maxLength: 63
+                              type: string
+                            role:
+                              description: Role of the VPC Prefix (control-plane or
+                                worker)
+                              enum:
+                              - control-plane
+                              - worker
+                              type: string
+                          required:
+                          - cidr
+                          - name
+                          type: object
+                        type: array
                     required:
                     - authentication
                     - siteRef

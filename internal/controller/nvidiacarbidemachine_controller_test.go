@@ -283,7 +283,7 @@ var _ = Describe("NvidiaCarbideMachine Controller", func() {
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: namespacedName})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Requeue).To(BeFalse())
+			Expect(result.Requeue).To(BeFalse()) //nolint:staticcheck // checking Requeue field
 			Expect(result.RequeueAfter).To(BeZero())
 
 			updatedMachine := &infrastructurev1.NvidiaCarbideMachine{}
@@ -353,8 +353,8 @@ var _ = Describe("NvidiaCarbideMachine Controller", func() {
 
 			// Test reconcileDelete directly to avoid fake client issues with DeletionTimestamp
 			machineScope := &scope.MachineScope{
-				Cluster: cluster,
-				Machine: machine,
+				Cluster:              cluster,
+				Machine:              machine,
 				NvidiaCarbideCluster: nvidiaCarbideCluster,
 				NvidiaCarbideClient:  mockClient,
 				OrgName:              orgName,
@@ -378,7 +378,7 @@ var _ = Describe("NvidiaCarbideMachine Controller", func() {
 
 			result, err := reconciler.reconcileDelete(ctx, machineScope)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Requeue).To(BeFalse())
+			Expect(result.Requeue).To(BeFalse()) //nolint:staticcheck // checking Requeue field
 			Expect(deleteInstanceCalled).To(BeTrue())
 			Expect(machineScope.NvidiaCarbideMachine.Finalizers).NotTo(ContainElement(NvidiaCarbideMachineFinalizer))
 		})
@@ -393,8 +393,8 @@ var _ = Describe("NvidiaCarbideMachine Controller", func() {
 			}
 
 			machineScope := &scope.MachineScope{
-				Cluster: cluster,
-				Machine: machine,
+				Cluster:              cluster,
+				Machine:              machine,
 				NvidiaCarbideCluster: nvidiaCarbideCluster,
 				NvidiaCarbideClient:  mockClient,
 				OrgName:              orgName,
@@ -418,7 +418,7 @@ var _ = Describe("NvidiaCarbideMachine Controller", func() {
 
 			result, err := reconciler.reconcileDelete(ctx, machineScope)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Requeue).To(BeFalse())
+			Expect(result.Requeue).To(BeFalse()) //nolint:staticcheck // checking Requeue field
 		})
 	})
 
@@ -505,7 +505,7 @@ var _ = Describe("NvidiaCarbideMachine Controller", func() {
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: namespacedName})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Requeue).To(BeFalse())
+			Expect(result.Requeue).To(BeFalse()) //nolint:staticcheck // checking Requeue field
 			Expect(createInstanceCalled).To(BeFalse())
 
 			updatedMachine := &infrastructurev1.NvidiaCarbideMachine{}

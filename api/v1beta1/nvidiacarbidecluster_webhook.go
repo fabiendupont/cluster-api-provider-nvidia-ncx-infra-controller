@@ -137,6 +137,30 @@ func (r *NvidiaCarbideCluster) validateCluster() field.ErrorList {
 		}
 	}
 
+	// Validate VPC Prefixes
+	for i, prefix := range r.Spec.VPCPrefixes {
+		prefixPath := specPath.Child("vpcPrefixes").Index(i)
+
+		if prefix.Name == "" {
+			allErrs = append(allErrs, field.Required(
+				prefixPath.Child("name"),
+				"VPC prefix name must not be empty"))
+		}
+
+		if prefix.CIDR != "" {
+			if _, _, err := net.ParseCIDR(prefix.CIDR); err != nil {
+				allErrs = append(allErrs, field.Invalid(
+					prefixPath.Child("cidr"),
+					prefix.CIDR,
+					fmt.Sprintf("invalid CIDR: %v", err)))
+			}
+		} else {
+			allErrs = append(allErrs, field.Required(
+				prefixPath.Child("cidr"),
+				"CIDR must not be empty"))
+		}
+	}
+
 	// Validate authentication
 	if r.Spec.Authentication.SecretRef.Name == "" {
 		allErrs = append(allErrs, field.Required(

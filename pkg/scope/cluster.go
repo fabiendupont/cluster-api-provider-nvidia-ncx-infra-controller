@@ -58,8 +58,12 @@ type NvidiaCarbideClientInterface interface {
 	DeleteNetworkSecurityGroup(ctx context.Context, org string, nsgId string) (*http.Response, error)
 
 	// Allocation
-	CreateAllocation(ctx context.Context, org string, req bmm.AllocationCreateRequest) (*bmm.Allocation, *http.Response, error)
-	GetAllocation(ctx context.Context, org string, allocationId string) (*bmm.Allocation, *http.Response, error)
+	CreateAllocation(
+		ctx context.Context, org string, req bmm.AllocationCreateRequest,
+	) (*bmm.Allocation, *http.Response, error)
+	GetAllocation(
+		ctx context.Context, org string, allocationId string,
+	) (*bmm.Allocation, *http.Response, error)
 	GetAllAllocation(ctx context.Context, org string) ([]bmm.Allocation, *http.Response, error)
 	DeleteAllocation(ctx context.Context, org string, allocationId string) (*http.Response, error)
 
@@ -81,11 +85,28 @@ type NvidiaCarbideClientInterface interface {
 	GetCurrentTenant(ctx context.Context, org string) (*bmm.Tenant, *http.Response, error)
 
 	// Instance update and history
-	UpdateInstance(ctx context.Context, org string, instanceId string, req bmm.InstanceUpdateRequest) (*bmm.Instance, *http.Response, error)
-	GetInstanceStatusHistory(ctx context.Context, org string, instanceId string) ([]bmm.StatusDetail, *http.Response, error)
+	UpdateInstance(
+		ctx context.Context, org string, instanceId string, req bmm.InstanceUpdateRequest,
+	) (*bmm.Instance, *http.Response, error)
+	GetInstanceStatusHistory(
+		ctx context.Context, org string, instanceId string,
+	) ([]bmm.StatusDetail, *http.Response, error)
 
 	// Batch instance creation
-	BatchCreateInstance(ctx context.Context, org string, req bmm.BatchInstanceCreateRequest) ([]bmm.Instance, *http.Response, error)
+	BatchCreateInstance(
+		ctx context.Context, org string, req bmm.BatchInstanceCreateRequest,
+	) ([]bmm.Instance, *http.Response, error)
+
+	// VPC Prefix
+	CreateVpcPrefix(
+		ctx context.Context, org string, req bmm.VpcPrefixCreateRequest,
+	) (*bmm.VpcPrefix, *http.Response, error)
+	GetVpcPrefix(
+		ctx context.Context, org string, vpcPrefixId string,
+	) (*bmm.VpcPrefix, *http.Response, error)
+	DeleteVpcPrefix(
+		ctx context.Context, org string, vpcPrefixId string,
+	) (*http.Response, error)
 }
 
 // carbideClient wraps the SDK APIClient and injects auth context
@@ -222,6 +243,21 @@ func (c *carbideClient) BatchCreateInstance(
 	ctx context.Context, org string, req bmm.BatchInstanceCreateRequest,
 ) ([]bmm.Instance, *http.Response, error) {
 	return c.client.InstanceAPI.BatchCreateInstance(c.authCtx(ctx), org).BatchInstanceCreateRequest(req).Execute()
+}
+
+// VPC Prefix methods
+func (c *carbideClient) CreateVpcPrefix(
+	ctx context.Context, org string, req bmm.VpcPrefixCreateRequest,
+) (*bmm.VpcPrefix, *http.Response, error) {
+	return c.client.VPCPrefixAPI.CreateVpcPrefix(c.authCtx(ctx), org).VpcPrefixCreateRequest(req).Execute()
+}
+func (c *carbideClient) GetVpcPrefix(
+	ctx context.Context, org, vpcPrefixId string,
+) (*bmm.VpcPrefix, *http.Response, error) {
+	return c.client.VPCPrefixAPI.GetVpcPrefix(c.authCtx(ctx), org, vpcPrefixId).Execute()
+}
+func (c *carbideClient) DeleteVpcPrefix(ctx context.Context, org, vpcPrefixId string) (*http.Response, error) {
+	return c.client.VPCPrefixAPI.DeleteVpcPrefix(c.authCtx(ctx), org, vpcPrefixId).Execute()
 }
 
 // ClusterScopeParams defines parameters for creating a cluster scope
@@ -416,7 +452,6 @@ func (s *ClusterScope) SetIPBlockID(ipBlockID string) {
 	s.NvidiaCarbideCluster.Status.NetworkStatus.IPBlockID = ipBlockID
 }
 
-
 func (s *ClusterScope) AllocationID() string {
 	return s.NvidiaCarbideCluster.Status.NetworkStatus.AllocationID
 }
@@ -431,6 +466,22 @@ func (s *ClusterScope) ChildIPBlockID() string {
 
 func (s *ClusterScope) SetChildIPBlockID(childIPBlockID string) {
 	s.NvidiaCarbideCluster.Status.NetworkStatus.ChildIPBlockID = childIPBlockID
+}
+
+// VPCPrefixIDs returns the VPC Prefix IDs from status
+func (s *ClusterScope) VPCPrefixIDs() map[string]string {
+	if s.NvidiaCarbideCluster.Status.NetworkStatus.VPCPrefixIDs == nil {
+		s.NvidiaCarbideCluster.Status.NetworkStatus.VPCPrefixIDs = make(map[string]string)
+	}
+	return s.NvidiaCarbideCluster.Status.NetworkStatus.VPCPrefixIDs
+}
+
+// SetVPCPrefixID sets a VPC Prefix ID in status
+func (s *ClusterScope) SetVPCPrefixID(name, id string) {
+	if s.NvidiaCarbideCluster.Status.NetworkStatus.VPCPrefixIDs == nil {
+		s.NvidiaCarbideCluster.Status.NetworkStatus.VPCPrefixIDs = make(map[string]string)
+	}
+	s.NvidiaCarbideCluster.Status.NetworkStatus.VPCPrefixIDs[name] = id
 }
 
 // PatchObject persists the cluster status

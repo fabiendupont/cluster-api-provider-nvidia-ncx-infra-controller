@@ -28,7 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
-	capierrors "sigs.k8s.io/cluster-api/errors"
+	capierrors "sigs.k8s.io/cluster-api/errors" //nolint:staticcheck // required for CAPI contract FailureReason types
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/conditions"
@@ -222,7 +222,13 @@ func (r *NvidiaCarbideMachineReconciler) reconcileNormal(
 		return r.reconcileInstance(ctx, machineScope, clusterScope)
 	}
 
-	// Create new instance
+	// Create new instance.
+	// NOTE: BatchCreateInstance is available in the SDK for creating up to 18
+	// instances per call, but CAPI's reconcile-per-machine model makes batching
+	// impractical — each NvidiaCarbideMachine is reconciled independently with
+	// no coordination mechanism. A higher-level batching controller would be
+	// needed to detect concurrent pending machines and coordinate batch creation.
+	// For now, instances are created individually per reconcile.
 	if err := r.createInstance(ctx, machineScope, clusterScope); err != nil {
 		conditions.Set(machineScope.NvidiaCarbideMachine, metav1.Condition{
 			Type:    string(InstanceProvisionedCondition),
@@ -267,35 +273,9 @@ func (r *NvidiaCarbideMachineReconciler) createInstance(
 		Reason: "BootstrapDataReady",
 	})
 
-	// Validate site capabilities for advanced features
-	if len(machineScope.NvidiaCarbideMachine.Spec.NVLinkInterfaces) > 0 ||
-		len(machineScope.NvidiaCarbideMachine.Spec.InfiniBandInterfaces) > 0 {
-		siteID, siteErr := clusterScope.SiteID(ctx)
-		if siteErr == nil {
-			site, _, siteErr := clusterScope.NvidiaCarbideClient.GetSite(ctx, clusterScope.OrgName, siteID)
-			if siteErr == nil && site != nil && site.Capabilities != nil {
-				if len(machineScope.NvidiaCarbideMachine.Spec.NVLinkInterfaces) > 0 &&
-					site.Capabilities.NvLinkPartition != nil && !*site.Capabilities.NvLinkPartition {
-					return fmt.Errorf("site %s does not support NVLink partitioning", siteID)
-				}
-			}
-		}
-	}
-
-	// Validate tenant capabilities for targeted provisioning
-	if machineScope.NvidiaCarbideMachine.Spec.InstanceType.MachineID != "" {
-		tenant, _, tenantErr := clusterScope.NvidiaCarbideClient.GetCurrentTenant(ctx, clusterScope.OrgName)
-		if tenantErr == nil && tenant != nil && tenant.Capabilities != nil {
-			if tenant.Capabilities.TargetedInstanceCreation != nil && !*tenant.Capabilities.TargetedInstanceCreation {
-				return fmt.Errorf("tenant does not have targeted instance creation enabled; cannot use machineID")
-			}
-		}
-	}
-
-	// Get subnet ID for primary network interface
-	subnetID, err := machineScope.GetSubnetID()
-	if err != nil {
-		return fmt.Errorf("failed to get subnet ID: %w", err)
+	// Validate capabilities before creating
+	if err := r.validateCapabilities(ctx, machineScope, clusterScope); err != nil {
+		return err
 	}
 
 	// Get Site ID (as site name for ProviderID)
@@ -304,27 +284,10 @@ func (r *NvidiaCarbideMachineReconciler) createInstance(
 		return fmt.Errorf("failed to get site ID: %w", err)
 	}
 
-	// Build primary network interface
-	physicalFalse := false
-	interfaces := []bmm.InterfaceCreateRequest{
-		{
-			SubnetId:   &subnetID,
-			IsPhysical: &physicalFalse,
-		},
-	}
-
-	// Add additional network interfaces if specified
-	for _, additionalIf := range machineScope.NvidiaCarbideMachine.Spec.Network.AdditionalInterfaces {
-		// Look up subnet ID from cluster status
-		additionalSubnetID, ok := clusterScope.NvidiaCarbideCluster.Status.NetworkStatus.SubnetIDs[additionalIf.SubnetName]
-		if !ok {
-			return fmt.Errorf("subnet %s not found in cluster status", additionalIf.SubnetName)
-		}
-
-		interfaces = append(interfaces, bmm.InterfaceCreateRequest{
-			SubnetId:   &additionalSubnetID,
-			IsPhysical: &additionalIf.IsPhysical,
-		})
+	// Build network interfaces
+	interfaces, err := r.buildInterfaces(machineScope, clusterScope)
+	if err != nil {
+		return err
 	}
 
 	// Build instance create request
@@ -336,95 +299,12 @@ func (r *NvidiaCarbideMachineReconciler) createInstance(
 		Interfaces: interfaces,
 	}
 
-	// Set SSH key groups if specified
-	if len(machineScope.NvidiaCarbideMachine.Spec.SSHKeyGroups) > 0 {
-		instanceReq.SshKeyGroupIds = machineScope.NvidiaCarbideMachine.Spec.SSHKeyGroups
-	}
-
-	// Set labels if specified
-	if len(machineScope.NvidiaCarbideMachine.Spec.Labels) > 0 {
-		instanceReq.Labels = machineScope.NvidiaCarbideMachine.Spec.Labels
-	}
-
-	// Set instance type or specific machine ID
-	if machineScope.NvidiaCarbideMachine.Spec.InstanceType.ID != "" {
-		instanceReq.InstanceTypeId = &machineScope.NvidiaCarbideMachine.Spec.InstanceType.ID
-	}
-	if machineScope.NvidiaCarbideMachine.Spec.InstanceType.MachineID != "" {
-		instanceReq.MachineId = &machineScope.NvidiaCarbideMachine.Spec.InstanceType.MachineID
-	}
-
-	// Set AllowUnhealthyMachine if specified
-	if machineScope.NvidiaCarbideMachine.Spec.InstanceType.AllowUnhealthyMachine {
-		instanceReq.AllowUnhealthyMachine = &machineScope.NvidiaCarbideMachine.Spec.InstanceType.AllowUnhealthyMachine
-	}
-
-	// Set OperatingSystemId if specified
-	if machineScope.NvidiaCarbideMachine.Spec.OperatingSystem != nil &&
-		machineScope.NvidiaCarbideMachine.Spec.OperatingSystem.ID != "" {
-		osID := machineScope.NvidiaCarbideMachine.Spec.OperatingSystem.ID
-		instanceReq.OperatingSystemId = *bmm.NewNullableString(&osID)
-	}
-
-	// Set InfiniBand interfaces if specified
-	if len(machineScope.NvidiaCarbideMachine.Spec.InfiniBandInterfaces) > 0 {
-		ibInterfaces := make([]bmm.InfiniBandInterfaceCreateRequest, 0, len(machineScope.NvidiaCarbideMachine.Spec.InfiniBandInterfaces))
-		for _, ibSpec := range machineScope.NvidiaCarbideMachine.Spec.InfiniBandInterfaces {
-			ibReq := bmm.InfiniBandInterfaceCreateRequest{
-				PartitionId: &ibSpec.PartitionID,
-			}
-			if ibSpec.Device != "" {
-				ibReq.Device = &ibSpec.Device
-			}
-			if ibSpec.DeviceInstance != nil {
-				ibReq.DeviceInstance = ibSpec.DeviceInstance
-			}
-			if ibSpec.IsPhysical {
-				ibReq.IsPhysical = &ibSpec.IsPhysical
-			}
-			ibInterfaces = append(ibInterfaces, ibReq)
-		}
-		instanceReq.InfinibandInterfaces = ibInterfaces
-	}
-
-	// Set NVLink interfaces if specified
-	if len(machineScope.NvidiaCarbideMachine.Spec.NVLinkInterfaces) > 0 {
-		nvlinkInterfaces := make([]bmm.NVLinkInterfaceCreateRequest, 0, len(machineScope.NvidiaCarbideMachine.Spec.NVLinkInterfaces))
-		for _, nvSpec := range machineScope.NvidiaCarbideMachine.Spec.NVLinkInterfaces {
-			nvReq := bmm.NVLinkInterfaceCreateRequest{
-				NvLinklogicalPartitionId: &nvSpec.LogicalPartitionID,
-			}
-			if nvSpec.DeviceInstance != nil {
-				nvReq.DeviceInstance = nvSpec.DeviceInstance
-			}
-			nvlinkInterfaces = append(nvlinkInterfaces, nvReq)
-		}
-		instanceReq.NvLinkInterfaces = nvlinkInterfaces
-	}
-
-	// Set description if specified
-	if machineScope.NvidiaCarbideMachine.Spec.Description != "" {
-		desc := machineScope.NvidiaCarbideMachine.Spec.Description
-		instanceReq.Description = *bmm.NewNullableString(&desc)
-	}
-
-	// Set always boot with custom iPXE if specified
-	if machineScope.NvidiaCarbideMachine.Spec.AlwaysBootWithCustomIpxe {
-		instanceReq.AlwaysBootWithCustomIpxe = &machineScope.NvidiaCarbideMachine.Spec.AlwaysBootWithCustomIpxe
-	}
-
-	// Enable phone home (defaults to true unless explicitly disabled)
-	if machineScope.NvidiaCarbideMachine.Spec.PhoneHomeEnabled != nil {
-		instanceReq.PhoneHomeEnabled = machineScope.NvidiaCarbideMachine.Spec.PhoneHomeEnabled
-	} else {
-		phoneHome := true
-		instanceReq.PhoneHomeEnabled = &phoneHome
-	}
+	// Apply optional spec fields to the request
+	r.applyOptionalInstanceFields(machineScope, &instanceReq)
 
 	logger.Info("Creating NVIDIA Carbide instance",
 		"name", machineScope.Name(),
 		"vpcID", machineScope.VPCID(),
-		"subnetID", subnetID,
 		"role", machineScope.Role())
 
 	// Create instance via NVIDIA Carbide API
@@ -550,6 +430,21 @@ func (r *NvidiaCarbideMachineReconciler) reconcileInstance(
 			Reason: "NvidiaCarbideMachineReady",
 		})
 
+		// Apply post-creation updates if spec has changed
+		if updateReq, needsUpdate := r.buildUpdateRequest(machineScope, instance); needsUpdate {
+			logger.Info("Applying post-creation updates to instance", "instanceID", machineScope.InstanceID())
+			_, _, updateErr := machineScope.NvidiaCarbideClient.UpdateInstance(
+				ctx, machineScope.OrgName, machineScope.InstanceID(), updateReq)
+			if updateErr != nil {
+				logger.Error(updateErr, "failed to update instance", "instanceID", machineScope.InstanceID())
+				r.recordEvent(machineScope.NvidiaCarbideMachine, corev1.EventTypeWarning, "UpdateFailed",
+					"Failed to update instance %s: %v", machineScope.InstanceID(), updateErr)
+			} else {
+				r.recordEvent(machineScope.NvidiaCarbideMachine, corev1.EventTypeNormal, "InstanceUpdated",
+					"Successfully updated instance %s", machineScope.InstanceID())
+			}
+		}
+
 		// Set control plane endpoint if not already configured.
 		// If a load balancer VIP is pre-configured in ControlPlaneEndpoint,
 		// it takes precedence over individual machine addresses.
@@ -581,7 +476,7 @@ func (r *NvidiaCarbideMachineReconciler) reconcileInstance(
 		return ctrl.Result{}, nil
 	}
 
-	// Instance is still provisioning, requeue
+	// Instance is still provisioning or in error, requeue
 	instanceIDStr := ""
 	statusStr := ""
 	if instance.Id != nil {
@@ -589,6 +484,18 @@ func (r *NvidiaCarbideMachineReconciler) reconcileInstance(
 	}
 	if instance.Status != nil {
 		statusStr = string(*instance.Status)
+	}
+
+	// Fetch and expose status history for debugging when in error or prolonged provisioning
+	if statusStr == "Error" || statusStr == "Provisioning" {
+		r.exposeStatusHistory(ctx, machineScope)
+	}
+
+	// Set failure info for error state
+	if statusStr == "Error" {
+		errReason := capierrors.MachineStatusError("ProvisioningFailed")
+		errMsg := fmt.Sprintf("Instance %s is in Error state", instanceIDStr)
+		setMachineFailure(machineScope.NvidiaCarbideMachine, errReason, errMsg)
 	}
 
 	conditions.Set(machineScope.NvidiaCarbideMachine, metav1.Condition{
@@ -638,6 +545,288 @@ func (r *NvidiaCarbideMachineReconciler) reconcileDelete(
 
 	logger.Info("Successfully deleted NvidiaCarbideMachine")
 	return ctrl.Result{}, nil
+}
+
+// validateCapabilities checks site and tenant capabilities for advanced features.
+func (r *NvidiaCarbideMachineReconciler) validateCapabilities(
+	ctx context.Context,
+	machineScope *scope.MachineScope,
+	clusterScope *scope.ClusterScope,
+) error {
+	spec := machineScope.NvidiaCarbideMachine.Spec
+
+	if len(spec.NVLinkInterfaces) > 0 || len(spec.InfiniBandInterfaces) > 0 {
+		siteID, siteErr := clusterScope.SiteID(ctx)
+		if siteErr == nil {
+			site, _, siteErr := clusterScope.NvidiaCarbideClient.GetSite(
+				ctx, clusterScope.OrgName, siteID)
+			if siteErr == nil && site != nil && site.Capabilities != nil {
+				if len(spec.NVLinkInterfaces) > 0 &&
+					site.Capabilities.NvLinkPartition != nil &&
+					!*site.Capabilities.NvLinkPartition {
+					return fmt.Errorf("site %s does not support NVLink partitioning", siteID)
+				}
+			}
+		}
+	}
+
+	if spec.InstanceType.MachineID != "" {
+		tenant, _, tenantErr := clusterScope.NvidiaCarbideClient.GetCurrentTenant(
+			ctx, clusterScope.OrgName)
+		if tenantErr == nil && tenant != nil && tenant.Capabilities != nil {
+			if tenant.Capabilities.TargetedInstanceCreation != nil &&
+				!*tenant.Capabilities.TargetedInstanceCreation {
+				return fmt.Errorf("tenant does not have targeted instance creation enabled; cannot use machineID")
+			}
+		}
+	}
+
+	return nil
+}
+
+// buildInterfaces constructs the network interface list from machine and cluster specs.
+func (r *NvidiaCarbideMachineReconciler) buildInterfaces(
+	machineScope *scope.MachineScope,
+	clusterScope *scope.ClusterScope,
+) ([]bmm.InterfaceCreateRequest, error) {
+	var interfaces []bmm.InterfaceCreateRequest
+
+	// Primary interface
+	if machineScope.NvidiaCarbideMachine.Spec.Network.VPCPrefixName != "" {
+		vpcPrefixID, err := machineScope.GetVPCPrefixID()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get VPC prefix ID: %w", err)
+		}
+		interfaces = append(interfaces, bmm.InterfaceCreateRequest{
+			VpcPrefixId: &vpcPrefixID,
+		})
+	} else {
+		subnetID, err := machineScope.GetSubnetID()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get subnet ID: %w", err)
+		}
+		physicalFalse := false
+		interfaces = append(interfaces, bmm.InterfaceCreateRequest{
+			SubnetId:   &subnetID,
+			IsPhysical: &physicalFalse,
+		})
+	}
+
+	// Additional interfaces
+	netStatus := clusterScope.NvidiaCarbideCluster.Status.NetworkStatus
+	for _, iface := range machineScope.NvidiaCarbideMachine.Spec.Network.AdditionalInterfaces {
+		if iface.VPCPrefixName != "" {
+			prefixID, ok := netStatus.VPCPrefixIDs[iface.VPCPrefixName]
+			if !ok {
+				return nil, fmt.Errorf("VPC prefix %s not found in cluster status", iface.VPCPrefixName)
+			}
+			interfaces = append(interfaces, bmm.InterfaceCreateRequest{
+				VpcPrefixId: &prefixID,
+			})
+		} else {
+			subnetID, ok := netStatus.SubnetIDs[iface.SubnetName]
+			if !ok {
+				return nil, fmt.Errorf("subnet %s not found in cluster status", iface.SubnetName)
+			}
+			interfaces = append(interfaces, bmm.InterfaceCreateRequest{
+				SubnetId:   &subnetID,
+				IsPhysical: &iface.IsPhysical,
+			})
+		}
+	}
+
+	return interfaces, nil
+}
+
+// applyOptionalInstanceFields sets optional fields on the InstanceCreateRequest from the machine spec.
+//
+//nolint:gocyclo // field-mapping function, each branch is simple
+func (r *NvidiaCarbideMachineReconciler) applyOptionalInstanceFields(
+	machineScope *scope.MachineScope,
+	req *bmm.InstanceCreateRequest,
+) {
+	spec := machineScope.NvidiaCarbideMachine.Spec
+
+	if len(spec.SSHKeyGroups) > 0 {
+		req.SshKeyGroupIds = spec.SSHKeyGroups
+	}
+	if len(spec.Labels) > 0 {
+		req.Labels = spec.Labels
+	}
+	if spec.InstanceType.ID != "" {
+		req.InstanceTypeId = &spec.InstanceType.ID
+	}
+	if spec.InstanceType.MachineID != "" {
+		req.MachineId = &spec.InstanceType.MachineID
+	}
+	if spec.InstanceType.AllowUnhealthyMachine {
+		req.AllowUnhealthyMachine = &spec.InstanceType.AllowUnhealthyMachine
+	}
+	if spec.OperatingSystem != nil && spec.OperatingSystem.ID != "" {
+		osID := spec.OperatingSystem.ID
+		req.OperatingSystemId = *bmm.NewNullableString(&osID)
+	}
+
+	if len(spec.InfiniBandInterfaces) > 0 {
+		ibInterfaces := make([]bmm.InfiniBandInterfaceCreateRequest, 0, len(spec.InfiniBandInterfaces))
+		for _, ibSpec := range spec.InfiniBandInterfaces {
+			ibReq := bmm.InfiniBandInterfaceCreateRequest{
+				PartitionId: &ibSpec.PartitionID,
+			}
+			if ibSpec.Device != "" {
+				ibReq.Device = &ibSpec.Device
+			}
+			if ibSpec.DeviceInstance != nil {
+				ibReq.DeviceInstance = ibSpec.DeviceInstance
+			}
+			if ibSpec.IsPhysical {
+				ibReq.IsPhysical = &ibSpec.IsPhysical
+			}
+			ibInterfaces = append(ibInterfaces, ibReq)
+		}
+		req.InfinibandInterfaces = ibInterfaces
+	}
+
+	if len(spec.NVLinkInterfaces) > 0 {
+		nvlinkInterfaces := make([]bmm.NVLinkInterfaceCreateRequest, 0, len(spec.NVLinkInterfaces))
+		for _, nvSpec := range spec.NVLinkInterfaces {
+			nvReq := bmm.NVLinkInterfaceCreateRequest{
+				NvLinklogicalPartitionId: &nvSpec.LogicalPartitionID,
+			}
+			if nvSpec.DeviceInstance != nil {
+				nvReq.DeviceInstance = nvSpec.DeviceInstance
+			}
+			nvlinkInterfaces = append(nvlinkInterfaces, nvReq)
+		}
+		req.NvLinkInterfaces = nvlinkInterfaces
+	}
+
+	if len(spec.DPUExtensionServices) > 0 {
+		dpuDeployments := make([]bmm.DpuExtensionServiceDeploymentRequest, 0, len(spec.DPUExtensionServices))
+		for _, dpuSpec := range spec.DPUExtensionServices {
+			dpuReq := bmm.DpuExtensionServiceDeploymentRequest{
+				DpuExtensionServiceId: &dpuSpec.ServiceID,
+			}
+			if dpuSpec.Version != "" {
+				dpuReq.Version = &dpuSpec.Version
+			}
+			dpuDeployments = append(dpuDeployments, dpuReq)
+		}
+		req.DpuExtensionServiceDeployments = dpuDeployments
+	}
+
+	if spec.Description != "" {
+		desc := spec.Description
+		req.Description = *bmm.NewNullableString(&desc)
+	}
+	if spec.AlwaysBootWithCustomIpxe {
+		req.AlwaysBootWithCustomIpxe = &spec.AlwaysBootWithCustomIpxe
+	}
+
+	if spec.PhoneHomeEnabled != nil {
+		req.PhoneHomeEnabled = spec.PhoneHomeEnabled
+	} else {
+		phoneHome := true
+		req.PhoneHomeEnabled = &phoneHome
+	}
+}
+
+// exposeStatusHistory fetches the instance status history and emits events.
+func (r *NvidiaCarbideMachineReconciler) exposeStatusHistory(
+	ctx context.Context, machineScope *scope.MachineScope,
+) {
+	logger := log.FromContext(ctx)
+
+	history, _, err := machineScope.NvidiaCarbideClient.GetInstanceStatusHistory(
+		ctx, machineScope.OrgName, machineScope.InstanceID())
+	if err != nil {
+		logger.V(1).Info("Failed to fetch status history", "error", err)
+		return
+	}
+
+	for _, entry := range history {
+		status := ""
+		if entry.Status != nil {
+			status = *entry.Status
+		}
+		message := ""
+		if entry.Message != nil {
+			message = *entry.Message
+		}
+		if message != "" {
+			r.recordEvent(machineScope.NvidiaCarbideMachine, corev1.EventTypeWarning, "StatusHistory",
+				"[%s] %s", status, message)
+		}
+	}
+}
+
+// buildUpdateRequest compares the desired spec with the current instance and returns
+// an InstanceUpdateRequest if any mutable fields have changed.
+func (r *NvidiaCarbideMachineReconciler) buildUpdateRequest(
+	machineScope *scope.MachineScope, instance *bmm.Instance,
+) (bmm.InstanceUpdateRequest, bool) {
+	updateReq := bmm.InstanceUpdateRequest{}
+	needsUpdate := false
+
+	// Check SSH key groups
+	if len(machineScope.NvidiaCarbideMachine.Spec.SSHKeyGroups) > 0 {
+		currentSSHKeys := instance.SshKeyGroupIds
+		desiredSSHKeys := machineScope.NvidiaCarbideMachine.Spec.SSHKeyGroups
+		if !stringSlicesEqual(currentSSHKeys, desiredSSHKeys) {
+			updateReq.SshKeyGroupIds = desiredSSHKeys
+			needsUpdate = true
+		}
+	}
+
+	// Check labels
+	if len(machineScope.NvidiaCarbideMachine.Spec.Labels) > 0 {
+		if !mapsEqual(instance.Labels, machineScope.NvidiaCarbideMachine.Spec.Labels) {
+			updateReq.Labels = machineScope.NvidiaCarbideMachine.Spec.Labels
+			needsUpdate = true
+		}
+	}
+
+	// Check DPU extension service deployments
+	if len(machineScope.NvidiaCarbideMachine.Spec.DPUExtensionServices) > 0 {
+		dpuDeployments := make([]bmm.DpuExtensionServiceDeploymentRequest, 0, len(machineScope.NvidiaCarbideMachine.Spec.DPUExtensionServices))
+		for _, dpuSpec := range machineScope.NvidiaCarbideMachine.Spec.DPUExtensionServices {
+			dpuReq := bmm.DpuExtensionServiceDeploymentRequest{
+				DpuExtensionServiceId: &dpuSpec.ServiceID,
+			}
+			if dpuSpec.Version != "" {
+				dpuReq.Version = &dpuSpec.Version
+			}
+			dpuDeployments = append(dpuDeployments, dpuReq)
+		}
+		updateReq.DpuExtensionServiceDeployments = dpuDeployments
+		needsUpdate = true
+	}
+
+	return updateReq, needsUpdate
+}
+
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func mapsEqual(a, b map[string]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if b[k] != v {
+			return false
+		}
+	}
+	return true
 }
 
 // findExistingInstance checks if an instance with the same name already exists.

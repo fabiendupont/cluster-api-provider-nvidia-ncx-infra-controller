@@ -40,6 +40,31 @@ spec:
           spec:
             description: spec defines the desired state of NvidiaCarbideMachine
             properties:
+              alwaysBootWithCustomIpxe:
+                description: |-
+                  AlwaysBootWithCustomIpxe when true, the iPXE script will always run on reboot.
+                  Requires the OS to be of iPXE type.
+                type: boolean
+              description:
+                description: Description for the NVIDIA Carbide instance
+                type: string
+              dpuExtensionServices:
+                description: DPUExtensionServices specifies DPU extension services
+                  to deploy on the instance
+                items:
+                  description: DPUExtensionServiceSpec defines a DPU extension service
+                    deployment
+                  properties:
+                    serviceID:
+                      description: ServiceID is the DPU extension service UUID
+                      type: string
+                    version:
+                      description: Version specifies the service version to deploy
+                      type: string
+                  required:
+                  - serviceID
+                  type: object
+                type: array
               infiniBandInterfaces:
                 description: InfiniBandInterfaces specifies InfiniBand partition attachments
                 items:
@@ -102,18 +127,27 @@ spec:
                             interface
                           type: boolean
                         subnetName:
-                          description: SubnetName specifies the subnet for this interface
+                          description: |-
+                            SubnetName specifies the subnet for this interface.
+                            Mutually exclusive with VPCPrefixName.
                           type: string
-                      required:
-                      - subnetName
+                        vpcPrefixName:
+                          description: |-
+                            VPCPrefixName specifies the VPC Prefix for this interface (physical interface).
+                            Mutually exclusive with SubnetName.
+                          type: string
                       type: object
                     type: array
                   subnetName:
-                    description: SubnetName specifies the subnet to attach the machine
-                      to
+                    description: |-
+                      SubnetName specifies the subnet to attach the machine to.
+                      Mutually exclusive with VPCPrefixName.
                     type: string
-                required:
-                - subnetName
+                  vpcPrefixName:
+                    description: |-
+                      VPCPrefixName specifies the VPC Prefix to attach the machine to (physical interface).
+                      Mutually exclusive with SubnetName.
+                    type: string
                 type: object
               nvlinkInterfaces:
                 description: NVLinkInterfaces specifies NVLink logical partition attachments
@@ -147,6 +181,11 @@ spec:
                     description: Version specifies the OS version
                     type: string
                 type: object
+              phoneHomeEnabled:
+                default: true
+                description: PhoneHomeEnabled enables the Phone Home service on the
+                  instance
+                type: boolean
               providerID:
                 description: |-
                   ProviderID is the unique identifier for the machine instance

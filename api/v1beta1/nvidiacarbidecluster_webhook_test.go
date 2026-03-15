@@ -136,6 +136,39 @@ func TestClusterWebhook_ImmutableVPCName(t *testing.T) {
 	}
 }
 
+func TestClusterWebhook_ValidVPCPrefix(t *testing.T) {
+	c := validCluster()
+	c.Spec.VPCPrefixes = []VPCPrefixSpec{
+		{Name: "prefix-1", CIDR: "10.0.3.0/24"},
+	}
+	_, err := c.ValidateCreate(context.Background(), c)
+	if err != nil {
+		t.Errorf("expected no error for valid VPC prefix, got %v", err)
+	}
+}
+
+func TestClusterWebhook_InvalidVPCPrefixCIDR(t *testing.T) {
+	c := validCluster()
+	c.Spec.VPCPrefixes = []VPCPrefixSpec{
+		{Name: "prefix-1", CIDR: "not-a-cidr"},
+	}
+	_, err := c.ValidateCreate(context.Background(), c)
+	if err == nil {
+		t.Error("expected error for invalid VPC prefix CIDR")
+	}
+}
+
+func TestClusterWebhook_EmptyVPCPrefixName(t *testing.T) {
+	c := validCluster()
+	c.Spec.VPCPrefixes = []VPCPrefixSpec{
+		{Name: "", CIDR: "10.0.3.0/24"},
+	}
+	_, err := c.ValidateCreate(context.Background(), c)
+	if err == nil {
+		t.Error("expected error for empty VPC prefix name")
+	}
+}
+
 func TestClusterWebhook_AllowedUpdate(t *testing.T) {
 	old := validCluster()
 	new := validCluster()

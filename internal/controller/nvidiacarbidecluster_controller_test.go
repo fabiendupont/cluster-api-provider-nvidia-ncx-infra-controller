@@ -160,7 +160,7 @@ var _ = Describe("NvidiaCarbideCluster Controller", func() {
 					return nil, nil, fmt.Errorf("not found")
 				},
 				CreateAllocationFunc: func(ctx context.Context, org string, req bmm.AllocationCreateRequest) (*bmm.Allocation, *http.Response, error) {
-					resourceType := "IPBlock"
+					resourceType := resourceTypeIPBlock
 					return &bmm.Allocation{
 						Id:   &allocationID,
 						Name: testutil.Ptr("test-cluster-allocation"),
@@ -193,7 +193,7 @@ var _ = Describe("NvidiaCarbideCluster Controller", func() {
 			// First reconcile — should add finalizer
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: namespacedName})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Requeue).To(BeTrue())
+			Expect(result.Requeue).To(BeTrue()) //nolint:staticcheck // Requeue used by controller for finalizer flow
 
 			// Verify finalizer was added
 			updatedCluster := &infrastructurev1.NvidiaCarbideCluster{}
@@ -232,7 +232,7 @@ var _ = Describe("NvidiaCarbideCluster Controller", func() {
 				},
 				CreateAllocationFunc: func(ctx context.Context, org string, req bmm.AllocationCreateRequest) (*bmm.Allocation, *http.Response, error) {
 					Expect(req.TenantId).To(Equal(tenantID))
-					resourceType := "IPBlock"
+					resourceType := resourceTypeIPBlock
 					return &bmm.Allocation{
 						Id: &allocationID,
 						AllocationConstraints: []bmm.AllocationConstraint{
@@ -270,7 +270,7 @@ var _ = Describe("NvidiaCarbideCluster Controller", func() {
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: namespacedName})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Requeue).To(BeFalse())
+			Expect(result.Requeue).To(BeFalse()) //nolint:staticcheck // checking Requeue field
 			Expect(createVPCCalled).To(BeTrue())
 			Expect(createSubnetCalled).To(BeTrue())
 
@@ -299,7 +299,7 @@ var _ = Describe("NvidiaCarbideCluster Controller", func() {
 				CreateAllocationFunc: func(ctx context.Context, org string, req bmm.AllocationCreateRequest) (*bmm.Allocation, *http.Response, error) {
 					allocID := uuid.New().String()
 					childID := uuid.New().String()
-					resourceType := "IPBlock"
+					resourceType := resourceTypeIPBlock
 					return &bmm.Allocation{
 						Id: &allocID,
 						AllocationConstraints: []bmm.AllocationConstraint{
@@ -352,7 +352,7 @@ var _ = Describe("NvidiaCarbideCluster Controller", func() {
 					return nil, testutil.MockHTTPResponse(409), fmt.Errorf("conflict")
 				},
 				GetAllAllocationFunc: func(ctx context.Context, org string) ([]bmm.Allocation, *http.Response, error) {
-					resourceType := "IPBlock"
+					resourceType := resourceTypeIPBlock
 					return []bmm.Allocation{
 						{
 							Id:   &allocationID,
@@ -394,7 +394,7 @@ var _ = Describe("NvidiaCarbideCluster Controller", func() {
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: namespacedName})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Requeue).To(BeFalse())
+			Expect(result.Requeue).To(BeFalse()) //nolint:staticcheck // checking Requeue field
 
 			updatedCluster := &infrastructurev1.NvidiaCarbideCluster{}
 			Expect(k8sClient.Get(ctx, namespacedName, updatedCluster)).To(Succeed())
@@ -432,9 +432,10 @@ var _ = Describe("NvidiaCarbideCluster Controller", func() {
 					return testutil.MockHTTPResponse(200), nil
 				},
 				DeleteIpblockFunc: func(ctx context.Context, org, id string) (*http.Response, error) {
-					if id == childIPBlockID {
+					switch id {
+					case childIPBlockID:
 						deleteOrder = append(deleteOrder, "child-ipblock")
-					} else if id == parentIPBlockID {
+					case parentIPBlockID:
 						deleteOrder = append(deleteOrder, "parent-ipblock")
 					}
 					return testutil.MockHTTPResponse(200), nil
@@ -480,7 +481,7 @@ var _ = Describe("NvidiaCarbideCluster Controller", func() {
 
 			result, err := reconciler.reconcileDelete(ctx, clusterScope)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Requeue).To(BeFalse())
+			Expect(result.Requeue).To(BeFalse()) //nolint:staticcheck // checking Requeue field
 
 			// Verify deletion order: NSG → Subnets → Allocation → Child IP Block → Parent IP Block → VPC
 			Expect(deleteOrder).To(Equal([]string{
@@ -525,7 +526,7 @@ var _ = Describe("NvidiaCarbideCluster Controller", func() {
 
 			result, err := reconciler.reconcileDelete(ctx, clusterScope)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Requeue).To(BeFalse())
+			Expect(result.Requeue).To(BeFalse()) //nolint:staticcheck // checking Requeue field
 		})
 	})
 
@@ -547,7 +548,7 @@ var _ = Describe("NvidiaCarbideCluster Controller", func() {
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: namespacedName})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Requeue).To(BeFalse())
+			Expect(result.Requeue).To(BeFalse()) //nolint:staticcheck // checking Requeue field
 		})
 	})
 
@@ -565,7 +566,7 @@ var _ = Describe("NvidiaCarbideCluster Controller", func() {
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: namespacedName})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Requeue).To(BeFalse())
+			Expect(result.Requeue).To(BeFalse()) //nolint:staticcheck // checking Requeue field
 		})
 	})
 
@@ -616,7 +617,7 @@ var _ = Describe("NvidiaCarbideCluster Controller", func() {
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: namespacedName})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Requeue).To(BeFalse())
+			Expect(result.Requeue).To(BeFalse()) //nolint:staticcheck // checking Requeue field
 			Expect(createVPCCalled).To(BeFalse())
 		})
 	})
