@@ -86,7 +86,22 @@ jobs:
           make deploy IMG=$IMG
           kubectl wait --for=condition=Available deployment \
             -l control-plane=controller-manager \
-            -n cluster-api-provider-nvidia-carbide-system --timeout=5m
+            -n cluster-api-provider-nvidia-carbide-system --timeout=5m || {
+            echo "=== Deployment status ==="
+            kubectl get deployment -n cluster-api-provider-nvidia-carbide-system -o wide
+            echo "=== Pod status ==="
+            kubectl get pods -n cluster-api-provider-nvidia-carbide-system -o wide
+            echo "=== Pod describe ==="
+            kubectl describe pods -n cluster-api-provider-nvidia-carbide-system
+            echo "=== Pod logs ==="
+            kubectl logs -l control-plane=controller-manager \
+              -n cluster-api-provider-nvidia-carbide-system --tail=100 || true
+            echo "=== Certificate status ==="
+            kubectl get certificate -n cluster-api-provider-nvidia-carbide-system -o wide
+            echo "=== Secrets ==="
+            kubectl get secrets -n cluster-api-provider-nvidia-carbide-system
+            exit 1
+          }
 
       - name: Run e2e tests
         run: |
