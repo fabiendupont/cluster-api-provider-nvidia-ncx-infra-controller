@@ -1,0 +1,48 @@
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: NcxInfraCluster
+metadata:
+  labels:
+    app.kubernetes.io/name: cluster-api-provider-nvidia-ncx-infra-controller
+    app.kubernetes.io/managed-by: kustomize
+  name: ncxinfracluster-sample
+spec:
+  siteRef:
+    name: my-site
+  tenantID: "00000000-0000-0000-0000-000000000001"
+  vpc:
+    name: my-cluster-vpc
+    networkVirtualizationType: ETHERNET_VIRTUALIZER
+    description: "VPC for the sample cluster"
+    labels:
+      environment: dev
+    networkSecurityGroup:
+      name: my-cluster-nsg
+      rules:
+        - name: allow-ssh
+          direction: ingress
+          protocol: tcp
+          portRange: "22"
+          sourceCIDR: "10.0.0.0/8"
+          action: allow
+        - name: allow-k8s-api
+          direction: ingress
+          protocol: tcp
+          portRange: "6443"
+          action: allow
+  subnets:
+    - name: control-plane
+      cidr: "10.0.1.0/24"
+      role: control-plane
+    - name: workers
+      cidr: "10.0.2.0/24"
+      role: worker
+  # VPC Peering (optional): peer with another VPC
+  # vpcPeerings:
+  #   - peerVpcId: "00000000-0000-0000-0000-000000000099"
+  controlPlaneEndpoint:
+    host: ""
+    port: 6443
+  authentication:
+    secretRef:
+      name: ncx-infra-credentials
+      namespace: default

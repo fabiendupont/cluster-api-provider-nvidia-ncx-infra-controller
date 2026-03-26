@@ -37,8 +37,8 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	infrastructurev1beta1 "github.com/fabiendupont/cluster-api-provider-nvidia-carbide/api/v1beta1"
-	"github.com/fabiendupont/cluster-api-provider-nvidia-carbide/internal/controller"
+	infrastructurev1beta1 "github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/api/v1beta1"
+	"github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/internal/controller"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -182,28 +182,28 @@ func main() {
 
 	ctx := context.Background()
 
-	if err := (&controller.NvidiaCarbideClusterReconciler{
+	if err := (&controller.NcxInfraClusterReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("nvidiacarbidecluster-controller"),
+		Recorder: mgr.GetEventRecorderFor("ncxinfracluster-controller"),
 	}).SetupWithManager(ctx, mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "NvidiaCarbideCluster")
+		setupLog.Error(err, "unable to create controller", "controller", "NcxInfraCluster")
 		os.Exit(1)
 	}
-	if err := (&controller.NvidiaCarbideMachineReconciler{
+	if err := (&controller.NcxInfraMachineReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("nvidiacarbidemachine-controller"),
+		Recorder: mgr.GetEventRecorderFor("ncxinframachine-controller"),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "NvidiaCarbideMachine")
+		setupLog.Error(err, "unable to create controller", "controller", "NcxInfraMachine")
 		os.Exit(1)
 	}
-	if err := (&infrastructurev1beta1.NvidiaCarbideCluster{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "NvidiaCarbideCluster")
+	if err := (&infrastructurev1beta1.NcxInfraCluster{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "NcxInfraCluster")
 		os.Exit(1)
 	}
-	if err := (&infrastructurev1beta1.NvidiaCarbideMachine{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "NvidiaCarbideMachine")
+	if err := (&infrastructurev1beta1.NcxInfraMachine{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "NcxInfraMachine")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

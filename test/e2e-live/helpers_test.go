@@ -36,7 +36,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	infrastructurev1beta1 "github.com/fabiendupont/cluster-api-provider-nvidia-carbide/api/v1beta1"
+	infrastructurev1beta1 "github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/api/v1beta1"
 )
 
 const (
@@ -49,8 +49,8 @@ const (
 
 // getKeycloakToken acquires a JWT from Keycloak using the resource owner password grant.
 func getKeycloakToken() string {
-	keycloakURL := os.Getenv("NVIDIA_CARBIDE_KEYCLOAK_URL")
-	Expect(keycloakURL).NotTo(BeEmpty(), "NVIDIA_CARBIDE_KEYCLOAK_URL must be set")
+	keycloakURL := os.Getenv("NCX_INFRA_KEYCLOAK_URL")
+	Expect(keycloakURL).NotTo(BeEmpty(), "NCX_INFRA_KEYCLOAK_URL must be set")
 
 	tokenURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token", keycloakURL, keycloakRealm)
 
@@ -85,11 +85,11 @@ func getKeycloakToken() string {
 func createCredentialsSecret(ctx context.Context, k8sClient client.Client, name, namespace, token string) *corev1.Secret {
 	// Use the in-cluster endpoint if available (for controllers running inside the cluster),
 	// otherwise fall back to the external endpoint.
-	endpoint := os.Getenv("NVIDIA_CARBIDE_API_ENDPOINT_INTERNAL")
+	endpoint := os.Getenv("NCX_INFRA_API_ENDPOINT_INTERNAL")
 	if endpoint == "" {
-		endpoint = os.Getenv("NVIDIA_CARBIDE_API_ENDPOINT")
+		endpoint = os.Getenv("NCX_INFRA_API_ENDPOINT")
 	}
-	Expect(endpoint).NotTo(BeEmpty(), "NVIDIA_CARBIDE_API_ENDPOINT or NVIDIA_CARBIDE_API_ENDPOINT_INTERNAL must be set")
+	Expect(endpoint).NotTo(BeEmpty(), "NCX_INFRA_API_ENDPOINT or NCX_INFRA_API_ENDPOINT_INTERNAL must be set")
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -107,8 +107,8 @@ func createCredentialsSecret(ctx context.Context, k8sClient client.Client, name,
 	return secret
 }
 
-// waitForClusterReady polls the NvidiaCarbideCluster status until Ready is true.
-func waitForClusterReady(ctx context.Context, k8sClient client.Client, cluster *infrastructurev1beta1.NvidiaCarbideCluster) {
+// waitForClusterReady polls the NcxInfraCluster status until Ready is true.
+func waitForClusterReady(ctx context.Context, k8sClient client.Client, cluster *infrastructurev1beta1.NcxInfraCluster) {
 	Eventually(func() bool {
 		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), cluster)
 		if err != nil {
@@ -117,11 +117,11 @@ func waitForClusterReady(ctx context.Context, k8sClient client.Client, cluster *
 		}
 		_, _ = fmt.Fprintf(GinkgoWriter, "Cluster ready=%v, vpcID=%s\n", cluster.Status.Ready, cluster.Status.VPCID)
 		return cluster.Status.Ready
-	}, clusterCreationTimeout, pollInterval).Should(BeTrue(), "NvidiaCarbideCluster did not become ready")
+	}, clusterCreationTimeout, pollInterval).Should(BeTrue(), "NcxInfraCluster did not become ready")
 }
 
-// waitForMachineReady polls the NvidiaCarbideMachine status until Ready is true.
-func waitForMachineReady(ctx context.Context, k8sClient client.Client, machine *infrastructurev1beta1.NvidiaCarbideMachine) {
+// waitForMachineReady polls the NcxInfraMachine status until Ready is true.
+func waitForMachineReady(ctx context.Context, k8sClient client.Client, machine *infrastructurev1beta1.NcxInfraMachine) {
 	Eventually(func() bool {
 		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(machine), machine)
 		if err != nil {
@@ -131,12 +131,12 @@ func waitForMachineReady(ctx context.Context, k8sClient client.Client, machine *
 		_, _ = fmt.Fprintf(GinkgoWriter, "Machine ready=%v, instanceID=%s, state=%s\n",
 			machine.Status.Ready, machine.Status.InstanceID, machine.Status.InstanceState)
 		return machine.Status.Ready
-	}, clusterCreationTimeout, pollInterval).Should(BeTrue(), "NvidiaCarbideMachine did not become ready")
+	}, clusterCreationTimeout, pollInterval).Should(BeTrue(), "NcxInfraMachine did not become ready")
 }
 
-// carbideAPIRequest makes an authenticated request to the Carbide REST API.
-func carbideAPIRequest(method, path, token string, body interface{}) (map[string]interface{}, int) {
-	endpoint := os.Getenv("NVIDIA_CARBIDE_API_ENDPOINT")
+// ncxInfraAPIRequest makes an authenticated request to the Carbide REST API.
+func ncxInfraAPIRequest(method, path, token string, body interface{}) (map[string]interface{}, int) {
+	endpoint := os.Getenv("NCX_INFRA_API_ENDPOINT")
 	Expect(endpoint).NotTo(BeEmpty())
 
 	var reqBody io.Reader
@@ -174,11 +174,11 @@ func carbideAPIRequest(method, path, token string, body interface{}) (map[string
 func getExistingSiteID(token, orgName string) string {
 	apiBase := fmt.Sprintf("/v2/org/%s/carbide", orgName)
 
-	result, status := carbideAPIRequest("GET", apiBase+"/site", token, nil)
+	result, status := ncxInfraAPIRequest("GET", apiBase+"/site", token, nil)
 	Expect(status).To(Equal(http.StatusOK), "Failed to list sites: %v", result)
 
 	// The response is an array — parse from raw response
-	endpoint := os.Getenv("NVIDIA_CARBIDE_API_ENDPOINT")
+	endpoint := os.Getenv("NCX_INFRA_API_ENDPOINT")
 	req, err := http.NewRequest("GET", endpoint+apiBase+"/site", nil)
 	Expect(err).NotTo(HaveOccurred())
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -231,7 +231,7 @@ func ensureSubnetReady(subnetID string) {
 // getInfraProviderID retrieves the infrastructure provider ID for the org.
 func getInfraProviderID(token, orgName string) string {
 	apiBase := fmt.Sprintf("/v2/org/%s/carbide", orgName)
-	result, status := carbideAPIRequest("GET", apiBase+"/infrastructure-provider/current", token, nil)
+	result, status := ncxInfraAPIRequest("GET", apiBase+"/infrastructure-provider/current", token, nil)
 	Expect(status).To(Equal(http.StatusOK), "Failed to get infrastructure provider: %v", result)
 	id := result["id"].(string)
 	_, _ = fmt.Fprintf(GinkgoWriter, "Infrastructure Provider ID: %s\n", id)
@@ -264,8 +264,8 @@ func setupSiteViaAPI(token, orgName, prefix string) (siteID, tenantID, machineID
 	ensureSiteRegistered(siteID)
 
 	// Get or create Tenant (idempotent)
-	carbideAPIRequest("POST", apiBase+"/tenant", token, map[string]interface{}{"org": orgName})
-	currentTenant, tStatus := carbideAPIRequest("GET", apiBase+"/tenant/current", token, nil)
+	ncxInfraAPIRequest("POST", apiBase+"/tenant", token, map[string]interface{}{"org": orgName})
+	currentTenant, tStatus := ncxInfraAPIRequest("GET", apiBase+"/tenant/current", token, nil)
 	Expect(tStatus).To(Equal(http.StatusOK), "Failed to get current tenant: %v", currentTenant)
 	tenantID = currentTenant["id"].(string)
 	_, _ = fmt.Fprintf(GinkgoWriter, "Tenant ID: %s\n", tenantID)

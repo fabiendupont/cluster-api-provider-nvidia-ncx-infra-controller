@@ -20,50 +20,50 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// NvidiaCarbideClusterTemplateSpec defines the desired state of NvidiaCarbideClusterTemplate
-type NvidiaCarbideClusterTemplateSpec struct {
-	// Template contains the NvidiaCarbideCluster template specification
+// NcxInfraClusterTemplateSpec defines the desired state of NcxInfraClusterTemplate
+type NcxInfraClusterTemplateSpec struct {
+	// Template contains the NcxInfraCluster template specification
 	// +required
-	Template NvidiaCarbideClusterTemplateResource `json:"template"`
+	Template NcxInfraClusterTemplateResource `json:"template"`
 }
 
-// NvidiaCarbideClusterTemplateResource describes the data needed to create a NvidiaCarbideCluster from a template
-type NvidiaCarbideClusterTemplateResource struct {
+// NcxInfraClusterTemplateResource describes the data needed to create a NcxInfraCluster from a template
+type NcxInfraClusterTemplateResource struct {
 	// Standard object's metadata
 	// +optional
 	ObjectMeta metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// Spec is the specification of the desired behavior of the cluster
 	// +required
-	Spec NvidiaCarbideClusterSpec `json:"spec"`
+	Spec NcxInfraClusterSpec `json:"spec"`
 }
 
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:path=nvidiacarbideclustertemplates,scope=Namespaced,categories=cluster-api
+// +kubebuilder:resource:path=ncxinfraclustertemplates,scope=Namespaced,categories=cluster-api
 // +kubebuilder:storageversion
 
-// NvidiaCarbideClusterTemplate is the Schema for the nvidiacarbideclustertemplates API
-type NvidiaCarbideClusterTemplate struct {
+// NcxInfraClusterTemplate is the Schema for the ncxinfraclustertemplates API
+type NcxInfraClusterTemplate struct {
 	metav1.TypeMeta `json:",inline"`
 
 	// metadata is a standard object metadata
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitzero"`
 
-	// spec defines the desired state of NvidiaCarbideClusterTemplate
+	// spec defines the desired state of NcxInfraClusterTemplate
 	// +required
-	Spec NvidiaCarbideClusterTemplateSpec `json:"spec"`
+	Spec NcxInfraClusterTemplateSpec `json:"spec"`
 }
 
 // +kubebuilder:object:root=true
 
-// NvidiaCarbideClusterTemplateList contains a list of NvidiaCarbideClusterTemplate
-type NvidiaCarbideClusterTemplateList struct {
+// NcxInfraClusterTemplateList contains a list of NcxInfraClusterTemplate
+type NcxInfraClusterTemplateList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitzero"`
-	Items           []NvidiaCarbideClusterTemplate `json:"items"`
+	Items           []NcxInfraClusterTemplate `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&NvidiaCarbideClusterTemplate{}, &NvidiaCarbideClusterTemplateList{})
+	SchemeBuilder.Register(&NcxInfraClusterTemplate{}, &NcxInfraClusterTemplateList{})
 }

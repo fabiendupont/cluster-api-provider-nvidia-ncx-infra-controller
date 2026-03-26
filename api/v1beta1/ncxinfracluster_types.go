@@ -26,8 +26,8 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// NvidiaCarbideClusterSpec defines the desired state of NvidiaCarbideCluster
-type NvidiaCarbideClusterSpec struct {
+// NcxInfraClusterSpec defines the desired state of NcxInfraCluster
+type NcxInfraClusterSpec struct {
 	// SiteRef references the NVIDIA Carbide Site where the cluster will be provisioned
 	// +required
 	SiteRef SiteReference `json:"siteRef"`
@@ -48,6 +48,10 @@ type NvidiaCarbideClusterSpec struct {
 	// VPCPrefixes for physical interface allocations (alternative to Subnets for FNN VPCs)
 	// +optional
 	VPCPrefixes []VPCPrefixSpec `json:"vpcPrefixes,omitempty"`
+
+	// VPCPeerings configures VPC peering connections to other VPCs
+	// +optional
+	VPCPeerings []VPCPeeringSpec `json:"vpcPeerings,omitempty"`
 
 	// ControlPlaneEndpoint represents the endpoint used to communicate with the control plane
 	// +optional
@@ -186,6 +190,13 @@ type VPCPrefixSpec struct {
 	Role string `json:"role,omitempty"`
 }
 
+// VPCPeeringSpec defines a VPC peering connection
+type VPCPeeringSpec struct {
+	// PeerVPCID is the ID of the remote VPC to peer with
+	// +required
+	PeerVPCID string `json:"peerVpcId"`
+}
+
 // AuthenticationSpec contains credentials for NVIDIA Carbide API
 type AuthenticationSpec struct {
 	// SecretRef references a Secret containing NVIDIA Carbide credentials
@@ -194,8 +205,8 @@ type AuthenticationSpec struct {
 	SecretRef corev1.SecretReference `json:"secretRef"`
 }
 
-// NvidiaCarbideClusterStatus defines the observed state of NvidiaCarbideCluster.
-type NvidiaCarbideClusterStatus struct {
+// NcxInfraClusterStatus defines the observed state of NcxInfraCluster.
+type NcxInfraClusterStatus struct {
 	// Ready indicates if the cluster infrastructure is ready
 	// +optional
 	Ready bool `json:"ready"`
@@ -220,7 +231,7 @@ type NvidiaCarbideClusterStatus struct {
 	// +optional
 	FailureMessage *string `json:"failureMessage,omitempty"`
 
-	// Conditions represent the current state of the NvidiaCarbideCluster
+	// Conditions represent the current state of the NcxInfraCluster
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
@@ -234,6 +245,10 @@ type NetworkStatus struct {
 	// VPCPrefixIDs maps VPC Prefix names to their IDs
 	// +optional
 	VPCPrefixIDs map[string]string `json:"vpcPrefixIDs,omitempty"`
+
+	// VPCPeeringIDs maps peer VPC IDs to their peering resource IDs
+	// +optional
+	VPCPeeringIDs map[string]string `json:"vpcPeeringIDs,omitempty"`
 
 	// NSGID is the Network Security Group ID
 	// +optional
@@ -255,42 +270,42 @@ type NetworkStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
-// NvidiaCarbideCluster is the Schema for the nvidiacarbideclusters API
-type NvidiaCarbideCluster struct {
+// NcxInfraCluster is the Schema for the ncxinfraclusters API
+type NcxInfraCluster struct {
 	metav1.TypeMeta `json:",inline"`
 
 	// metadata is a standard object metadata
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitzero"`
 
-	// spec defines the desired state of NvidiaCarbideCluster
+	// spec defines the desired state of NcxInfraCluster
 	// +required
-	Spec NvidiaCarbideClusterSpec `json:"spec"`
+	Spec NcxInfraClusterSpec `json:"spec"`
 
-	// status defines the observed state of NvidiaCarbideCluster
+	// status defines the observed state of NcxInfraCluster
 	// +optional
-	Status NvidiaCarbideClusterStatus `json:"status,omitzero"`
+	Status NcxInfraClusterStatus `json:"status,omitzero"`
 }
 
 // +kubebuilder:object:root=true
 
-// NvidiaCarbideClusterList contains a list of NvidiaCarbideCluster
-type NvidiaCarbideClusterList struct {
+// NcxInfraClusterList contains a list of NcxInfraCluster
+type NcxInfraClusterList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitzero"`
-	Items           []NvidiaCarbideCluster `json:"items"`
+	Items           []NcxInfraCluster `json:"items"`
 }
 
 // GetConditions returns the conditions from the status
-func (c *NvidiaCarbideCluster) GetConditions() []metav1.Condition {
+func (c *NcxInfraCluster) GetConditions() []metav1.Condition {
 	return c.Status.Conditions
 }
 
 // SetConditions sets the conditions in the status
-func (c *NvidiaCarbideCluster) SetConditions(conditions []metav1.Condition) {
+func (c *NcxInfraCluster) SetConditions(conditions []metav1.Condition) {
 	c.Status.Conditions = conditions
 }
 
 func init() {
-	SchemeBuilder.Register(&NvidiaCarbideCluster{}, &NvidiaCarbideClusterList{})
+	SchemeBuilder.Register(&NcxInfraCluster{}, &NcxInfraClusterList{})
 }

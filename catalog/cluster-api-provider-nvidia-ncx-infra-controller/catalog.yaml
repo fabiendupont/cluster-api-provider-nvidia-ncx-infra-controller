@@ -1,0 +1,24 @@
+---
+schema: olm.package
+name: cluster-api-provider-nvidia-ncx-infra-controller
+defaultChannel: alpha
+description: >-
+  Cluster API infrastructure provider for NVIDIA Carbide bare-metal platform.
+  Enables declarative provisioning and lifecycle management of Kubernetes
+  clusters on NVIDIA Carbide infrastructure using the Cluster API standard.
+---
+schema: olm.channel
+package: cluster-api-provider-nvidia-ncx-infra-controller
+name: alpha
+entries:
+  - name: cluster-api-provider-nvidia-ncx-infra-controller.v0.1.0
+---
+schema: olm.bundle
+package: cluster-api-provider-nvidia-ncx-infra-controller
+name: cluster-api-provider-nvidia-ncx-infra-controller.v0.1.0
+image: ghcr.io/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller-bundle:v0.1.0
+properties:
+  - type: olm.package
+    value:
+      packageName: cluster-api-provider-nvidia-ncx-infra-controller
+      version: 0.1.0

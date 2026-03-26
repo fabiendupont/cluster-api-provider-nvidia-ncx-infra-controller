@@ -31,13 +31,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	infrastructurev1 "github.com/fabiendupont/cluster-api-provider-nvidia-carbide/api/v1beta1"
-	"github.com/fabiendupont/cluster-api-provider-nvidia-carbide/internal/controller/testutil"
-	"github.com/fabiendupont/cluster-api-provider-nvidia-carbide/pkg/scope"
-	bmm "github.com/nvidia/bare-metal-manager-rest/sdk/standard"
+	infrastructurev1 "github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/api/v1beta1"
+	"github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/internal/controller/testutil"
+	"github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/pkg/scope"
+	nico "github.com/NVIDIA/ncx-infra-controller-rest/sdk/standard"
 )
 
-var _ = Describe("NvidiaCarbideMachine Controller", func() {
+var _ = Describe("NcxInfraMachine Controller", func() {
 	const (
 		clusterName      = "test-cluster"
 		machineName      = "test-machine-0"
@@ -51,8 +51,8 @@ var _ = Describe("NvidiaCarbideMachine Controller", func() {
 		ctx                  context.Context
 		cluster              *clusterv1.Cluster
 		machine              *clusterv1.Machine
-		nvidiaCarbideCluster *infrastructurev1.NvidiaCarbideCluster
-		nvidiaCarbideMachine *infrastructurev1.NvidiaCarbideMachine
+		nvidiaCarbideCluster *infrastructurev1.NcxInfraCluster
+		nvidiaCarbideMachine *infrastructurev1.NcxInfraMachine
 		credsSecret          *corev1.Secret
 		bootstrapSecret      *corev1.Secret
 		namespacedName       types.NamespacedName
@@ -75,7 +75,7 @@ var _ = Describe("NvidiaCarbideMachine Controller", func() {
 			Spec: clusterv1.ClusterSpec{
 				InfrastructureRef: clusterv1.ContractVersionedObjectReference{
 					APIGroup: "infrastructure.cluster.x-k8s.io",
-					Kind:     "NvidiaCarbideCluster",
+					Kind:     "NcxInfraCluster",
 					Name:     clusterName,
 				},
 			},
@@ -101,12 +101,12 @@ var _ = Describe("NvidiaCarbideMachine Controller", func() {
 		subnetID := uuid.New().String()
 		vpcID := uuid.New().String()
 
-		nvidiaCarbideCluster = &infrastructurev1.NvidiaCarbideCluster{
+		nvidiaCarbideCluster = &infrastructurev1.NcxInfraCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterName,
 				Namespace: clusterNamespace,
 			},
-			Spec: infrastructurev1.NvidiaCarbideClusterSpec{
+			Spec: infrastructurev1.NcxInfraClusterSpec{
 				SiteRef:  infrastructurev1.SiteReference{ID: siteID},
 				TenantID: tenantID,
 				VPC: infrastructurev1.VPCSpec{
@@ -118,12 +118,12 @@ var _ = Describe("NvidiaCarbideMachine Controller", func() {
 				},
 				Authentication: infrastructurev1.AuthenticationSpec{
 					SecretRef: corev1.SecretReference{
-						Name:      "nvidia-carbide-creds",
+						Name:      "ncx-infra-creds",
 						Namespace: clusterNamespace,
 					},
 				},
 			},
-			Status: infrastructurev1.NvidiaCarbideClusterStatus{
+			Status: infrastructurev1.NcxInfraClusterStatus{
 				Ready: true,
 				VPCID: vpcID,
 				NetworkStatus: infrastructurev1.NetworkStatus{
@@ -132,7 +132,7 @@ var _ = Describe("NvidiaCarbideMachine Controller", func() {
 			},
 		}
 
-		nvidiaCarbideMachine = &infrastructurev1.NvidiaCarbideMachine{
+		nvidiaCarbideMachine = &infrastructurev1.NcxInfraMachine{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      machineName,
 				Namespace: clusterNamespace,
@@ -145,7 +145,7 @@ var _ = Describe("NvidiaCarbideMachine Controller", func() {
 					},
 				},
 			},
-			Spec: infrastructurev1.NvidiaCarbideMachineSpec{
+			Spec: infrastructurev1.NcxInfraMachineSpec{
 				InstanceType: infrastructurev1.InstanceTypeSpec{
 					ID: "instance-type-uuid",
 				},
@@ -157,11 +157,11 @@ var _ = Describe("NvidiaCarbideMachine Controller", func() {
 
 		credsSecret = &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "nvidia-carbide-creds",
+				Name:      "ncx-infra-creds",
 				Namespace: clusterNamespace,
 			},
 			Data: map[string][]byte{
-				"endpoint": []byte("https://api.carbide.test"),
+				"endpoint": []byte("https://api.ncx-infra.test"),
 				"orgName":  []byte(orgName),
 				"token":    []byte("test-token"),
 			},
@@ -182,43 +182,43 @@ var _ = Describe("NvidiaCarbideMachine Controller", func() {
 		It("should create instance and set providerID in status", func() {
 			instanceID := uuid.New().String()
 			physMachineID := uuid.New().String()
-			status := bmm.InstanceStatus("Provisioning")
+			status := nico.InstanceStatus("Provisioning")
 
-			mockClient := &testutil.MockCarbideClient{
-				CreateInstanceFunc: func(ctx context.Context, org string, req bmm.InstanceCreateRequest) (*bmm.Instance, *http.Response, error) {
+			mockClient := &testutil.MockNcxInfraClient{
+				CreateInstanceFunc: func(ctx context.Context, org string, req nico.InstanceCreateRequest) (*nico.Instance, *http.Response, error) {
 					Expect(org).To(Equal(orgName))
 					Expect(req.Name).To(Equal(machineName))
 					Expect(req.VpcId).To(Equal(nvidiaCarbideCluster.Status.VPCID))
 					Expect(*req.PhoneHomeEnabled).To(BeTrue())
-					return &bmm.Instance{
+					return &nico.Instance{
 						Id:        &instanceID,
 						Name:      testutil.Ptr(machineName),
-						MachineId: *bmm.NewNullableString(&physMachineID),
+						MachineId: *nico.NewNullableString(&physMachineID),
 						Status:    &status,
 					}, testutil.MockHTTPResponse(201), nil
 				},
-				GetAllInstanceFunc: func(ctx context.Context, org string) ([]bmm.Instance, *http.Response, error) {
-					return []bmm.Instance{}, testutil.MockHTTPResponse(200), nil
+				GetAllInstanceFunc: func(ctx context.Context, org string) ([]nico.Instance, *http.Response, error) {
+					return []nico.Instance{}, testutil.MockHTTPResponse(200), nil
 				},
 			}
 
-			nvidiaCarbideMachine.Finalizers = []string{NvidiaCarbideMachineFinalizer}
+			nvidiaCarbideMachine.Finalizers = []string{NcxInfraMachineFinalizer}
 
 			scheme := newTestScheme()
 			k8sClient := fake.NewClientBuilder().
 				WithScheme(scheme).
 				WithObjects(cluster, machine, nvidiaCarbideCluster, nvidiaCarbideMachine, credsSecret, bootstrapSecret).
 				WithStatusSubresource(
-					&infrastructurev1.NvidiaCarbideMachine{},
-					&infrastructurev1.NvidiaCarbideCluster{},
+					&infrastructurev1.NcxInfraMachine{},
+					&infrastructurev1.NcxInfraCluster{},
 					&clusterv1.Machine{},
 				).
 				Build()
 
-			reconciler := &NvidiaCarbideMachineReconciler{
+			reconciler := &NcxInfraMachineReconciler{
 				Client:              k8sClient,
 				Scheme:              scheme,
-				NvidiaCarbideClient: mockClient,
+				NcxInfraClient: mockClient,
 				OrgName:             orgName,
 			}
 
@@ -228,12 +228,12 @@ var _ = Describe("NvidiaCarbideMachine Controller", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 
 			// Verify status was updated
-			updatedMachine := &infrastructurev1.NvidiaCarbideMachine{}
+			updatedMachine := &infrastructurev1.NcxInfraMachine{}
 			Expect(k8sClient.Get(ctx, namespacedName, updatedMachine)).To(Succeed())
 			Expect(updatedMachine.Status.InstanceID).To(Equal(instanceID))
 			Expect(updatedMachine.Status.MachineID).To(Equal(physMachineID))
 			Expect(updatedMachine.Status.ProviderID).NotTo(BeNil())
-			Expect(*updatedMachine.Status.ProviderID).To(ContainSubstring("nvidia-carbide://"))
+			Expect(*updatedMachine.Status.ProviderID).To(ContainSubstring("ncx-infra://"))
 			Expect(*updatedMachine.Status.ProviderID).To(ContainSubstring(instanceID))
 		})
 	})
@@ -241,25 +241,25 @@ var _ = Describe("NvidiaCarbideMachine Controller", func() {
 	Context("When instance is ready", func() {
 		It("should mark machine as ready", func() {
 			instanceID := uuid.New().String()
-			status := bmm.InstanceStatus("Ready")
+			status := nico.InstanceStatus("Ready")
 
-			mockClient := &testutil.MockCarbideClient{
-				GetInstanceFunc: func(ctx context.Context, org, id string) (*bmm.Instance, *http.Response, error) {
+			mockClient := &testutil.MockNcxInfraClient{
+				GetInstanceFunc: func(ctx context.Context, org, id string) (*nico.Instance, *http.Response, error) {
 					Expect(id).To(Equal(instanceID))
-					return &bmm.Instance{
+					return &nico.Instance{
 						Id:        &instanceID,
 						Name:      testutil.Ptr(machineName),
-						MachineId: *bmm.NewNullableString(testutil.Ptr(uuid.New().String())),
+						MachineId: *nico.NewNullableString(testutil.Ptr(uuid.New().String())),
 						Status:    &status,
-						Interfaces: []bmm.Interface{
+						Interfaces: []nico.Interface{
 							{IpAddresses: []string{"10.0.1.10"}},
 						},
 					}, testutil.MockHTTPResponse(200), nil
 				},
 			}
 
-			nvidiaCarbideMachine.Finalizers = []string{NvidiaCarbideMachineFinalizer}
-			nvidiaCarbideMachine.Status = infrastructurev1.NvidiaCarbideMachineStatus{
+			nvidiaCarbideMachine.Finalizers = []string{NcxInfraMachineFinalizer}
+			nvidiaCarbideMachine.Status = infrastructurev1.NcxInfraMachineStatus{
 				InstanceID: instanceID,
 			}
 
@@ -268,16 +268,16 @@ var _ = Describe("NvidiaCarbideMachine Controller", func() {
 				WithScheme(scheme).
 				WithObjects(cluster, machine, nvidiaCarbideCluster, nvidiaCarbideMachine, credsSecret, bootstrapSecret).
 				WithStatusSubresource(
-					&infrastructurev1.NvidiaCarbideMachine{},
-					&infrastructurev1.NvidiaCarbideCluster{},
+					&infrastructurev1.NcxInfraMachine{},
+					&infrastructurev1.NcxInfraCluster{},
 					&clusterv1.Machine{},
 				).
 				Build()
 
-			reconciler := &NvidiaCarbideMachineReconciler{
+			reconciler := &NcxInfraMachineReconciler{
 				Client:              k8sClient,
 				Scheme:              scheme,
-				NvidiaCarbideClient: mockClient,
+				NcxInfraClient: mockClient,
 				OrgName:             orgName,
 			}
 
@@ -286,7 +286,7 @@ var _ = Describe("NvidiaCarbideMachine Controller", func() {
 			Expect(result.Requeue).To(BeFalse()) //nolint:staticcheck // checking Requeue field
 			Expect(result.RequeueAfter).To(BeZero())
 
-			updatedMachine := &infrastructurev1.NvidiaCarbideMachine{}
+			updatedMachine := &infrastructurev1.NcxInfraMachine{}
 			Expect(k8sClient.Get(ctx, namespacedName, updatedMachine)).To(Succeed())
 			Expect(updatedMachine.Status.Ready).To(BeTrue())
 			Expect(updatedMachine.Status.Addresses).To(HaveLen(1))
@@ -297,20 +297,20 @@ var _ = Describe("NvidiaCarbideMachine Controller", func() {
 	Context("When instance is still provisioning", func() {
 		It("should requeue after 30 seconds", func() {
 			instanceID := uuid.New().String()
-			status := bmm.InstanceStatus("Provisioning")
+			status := nico.InstanceStatus("Provisioning")
 
-			mockClient := &testutil.MockCarbideClient{
-				GetInstanceFunc: func(ctx context.Context, org, id string) (*bmm.Instance, *http.Response, error) {
-					return &bmm.Instance{
+			mockClient := &testutil.MockNcxInfraClient{
+				GetInstanceFunc: func(ctx context.Context, org, id string) (*nico.Instance, *http.Response, error) {
+					return &nico.Instance{
 						Id:        &instanceID,
-						MachineId: *bmm.NewNullableString(testutil.Ptr(uuid.New().String())),
+						MachineId: *nico.NewNullableString(testutil.Ptr(uuid.New().String())),
 						Status:    &status,
 					}, testutil.MockHTTPResponse(200), nil
 				},
 			}
 
-			nvidiaCarbideMachine.Finalizers = []string{NvidiaCarbideMachineFinalizer}
-			nvidiaCarbideMachine.Status = infrastructurev1.NvidiaCarbideMachineStatus{
+			nvidiaCarbideMachine.Finalizers = []string{NcxInfraMachineFinalizer}
+			nvidiaCarbideMachine.Status = infrastructurev1.NcxInfraMachineStatus{
 				InstanceID: instanceID,
 			}
 
@@ -319,16 +319,16 @@ var _ = Describe("NvidiaCarbideMachine Controller", func() {
 				WithScheme(scheme).
 				WithObjects(cluster, machine, nvidiaCarbideCluster, nvidiaCarbideMachine, credsSecret, bootstrapSecret).
 				WithStatusSubresource(
-					&infrastructurev1.NvidiaCarbideMachine{},
-					&infrastructurev1.NvidiaCarbideCluster{},
+					&infrastructurev1.NcxInfraMachine{},
+					&infrastructurev1.NcxInfraCluster{},
 					&clusterv1.Machine{},
 				).
 				Build()
 
-			reconciler := &NvidiaCarbideMachineReconciler{
+			reconciler := &NcxInfraMachineReconciler{
 				Client:              k8sClient,
 				Scheme:              scheme,
-				NvidiaCarbideClient: mockClient,
+				NcxInfraClient: mockClient,
 				OrgName:             orgName,
 			}
 
@@ -343,7 +343,7 @@ var _ = Describe("NvidiaCarbideMachine Controller", func() {
 			instanceID := uuid.New().String()
 			deleteInstanceCalled := false
 
-			mockClient := &testutil.MockCarbideClient{
+			mockClient := &testutil.MockNcxInfraClient{
 				DeleteInstanceFunc: func(ctx context.Context, org, id string) (*http.Response, error) {
 					deleteInstanceCalled = true
 					Expect(id).To(Equal(instanceID))
@@ -355,24 +355,24 @@ var _ = Describe("NvidiaCarbideMachine Controller", func() {
 			machineScope := &scope.MachineScope{
 				Cluster:              cluster,
 				Machine:              machine,
-				NvidiaCarbideCluster: nvidiaCarbideCluster,
-				NvidiaCarbideClient:  mockClient,
+				NcxInfraCluster: nvidiaCarbideCluster,
+				NcxInfraClient:  mockClient,
 				OrgName:              orgName,
-				NvidiaCarbideMachine: &infrastructurev1.NvidiaCarbideMachine{
+				NcxInfraMachine: &infrastructurev1.NcxInfraMachine{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       machineName,
 						Namespace:  clusterNamespace,
-						Finalizers: []string{NvidiaCarbideMachineFinalizer},
+						Finalizers: []string{NcxInfraMachineFinalizer},
 					},
-					Status: infrastructurev1.NvidiaCarbideMachineStatus{
+					Status: infrastructurev1.NcxInfraMachineStatus{
 						InstanceID: instanceID,
 					},
 				},
 			}
 
-			reconciler := &NvidiaCarbideMachineReconciler{
+			reconciler := &NcxInfraMachineReconciler{
 				Scheme:              newTestScheme(),
-				NvidiaCarbideClient: mockClient,
+				NcxInfraClient: mockClient,
 				OrgName:             orgName,
 			}
 
@@ -380,13 +380,13 @@ var _ = Describe("NvidiaCarbideMachine Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Requeue).To(BeFalse()) //nolint:staticcheck // checking Requeue field
 			Expect(deleteInstanceCalled).To(BeTrue())
-			Expect(machineScope.NvidiaCarbideMachine.Finalizers).NotTo(ContainElement(NvidiaCarbideMachineFinalizer))
+			Expect(machineScope.NcxInfraMachine.Finalizers).NotTo(ContainElement(NcxInfraMachineFinalizer))
 		})
 
 		It("should handle 404 gracefully during deletion", func() {
 			instanceID := uuid.New().String()
 
-			mockClient := &testutil.MockCarbideClient{
+			mockClient := &testutil.MockNcxInfraClient{
 				DeleteInstanceFunc: func(ctx context.Context, org, id string) (*http.Response, error) {
 					return testutil.MockHTTPResponse(404), fmt.Errorf("not found")
 				},
@@ -395,24 +395,24 @@ var _ = Describe("NvidiaCarbideMachine Controller", func() {
 			machineScope := &scope.MachineScope{
 				Cluster:              cluster,
 				Machine:              machine,
-				NvidiaCarbideCluster: nvidiaCarbideCluster,
-				NvidiaCarbideClient:  mockClient,
+				NcxInfraCluster: nvidiaCarbideCluster,
+				NcxInfraClient:  mockClient,
 				OrgName:              orgName,
-				NvidiaCarbideMachine: &infrastructurev1.NvidiaCarbideMachine{
+				NcxInfraMachine: &infrastructurev1.NcxInfraMachine{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       machineName,
 						Namespace:  clusterNamespace,
-						Finalizers: []string{NvidiaCarbideMachineFinalizer},
+						Finalizers: []string{NcxInfraMachineFinalizer},
 					},
-					Status: infrastructurev1.NvidiaCarbideMachineStatus{
+					Status: infrastructurev1.NcxInfraMachineStatus{
 						InstanceID: instanceID,
 					},
 				},
 			}
 
-			reconciler := &NvidiaCarbideMachineReconciler{
+			reconciler := &NcxInfraMachineReconciler{
 				Scheme:              newTestScheme(),
-				NvidiaCarbideClient: mockClient,
+				NcxInfraClient: mockClient,
 				OrgName:             orgName,
 			}
 
@@ -431,13 +431,13 @@ var _ = Describe("NvidiaCarbideMachine Controller", func() {
 				WithScheme(scheme).
 				WithObjects(cluster, machine, nvidiaCarbideCluster, nvidiaCarbideMachine, credsSecret).
 				WithStatusSubresource(
-					&infrastructurev1.NvidiaCarbideMachine{},
-					&infrastructurev1.NvidiaCarbideCluster{},
+					&infrastructurev1.NcxInfraMachine{},
+					&infrastructurev1.NcxInfraCluster{},
 					&clusterv1.Machine{},
 				).
 				Build()
 
-			reconciler := &NvidiaCarbideMachineReconciler{
+			reconciler := &NcxInfraMachineReconciler{
 				Client: k8sClient,
 				Scheme: scheme,
 			}
@@ -451,55 +451,55 @@ var _ = Describe("NvidiaCarbideMachine Controller", func() {
 	Context("When an instance with the same name already exists", func() {
 		It("should reuse the existing instance", func() {
 			existingInstanceID := uuid.New().String()
-			status := bmm.InstanceStatus("Ready")
+			status := nico.InstanceStatus("Ready")
 			physMachineID := uuid.New().String()
 
 			createInstanceCalled := false
-			mockClient := &testutil.MockCarbideClient{
-				GetAllInstanceFunc: func(ctx context.Context, org string) ([]bmm.Instance, *http.Response, error) {
-					return []bmm.Instance{
+			mockClient := &testutil.MockNcxInfraClient{
+				GetAllInstanceFunc: func(ctx context.Context, org string) ([]nico.Instance, *http.Response, error) {
+					return []nico.Instance{
 						{
 							Id:        &existingInstanceID,
 							Name:      testutil.Ptr(machineName),
-							MachineId: *bmm.NewNullableString(&physMachineID),
+							MachineId: *nico.NewNullableString(&physMachineID),
 							Status:    &status,
 						},
 					}, testutil.MockHTTPResponse(200), nil
 				},
-				GetInstanceFunc: func(ctx context.Context, org, id string) (*bmm.Instance, *http.Response, error) {
-					return &bmm.Instance{
+				GetInstanceFunc: func(ctx context.Context, org, id string) (*nico.Instance, *http.Response, error) {
+					return &nico.Instance{
 						Id:        &existingInstanceID,
 						Name:      testutil.Ptr(machineName),
-						MachineId: *bmm.NewNullableString(&physMachineID),
+						MachineId: *nico.NewNullableString(&physMachineID),
 						Status:    &status,
-						Interfaces: []bmm.Interface{
+						Interfaces: []nico.Interface{
 							{IpAddresses: []string{"10.0.1.10"}},
 						},
 					}, testutil.MockHTTPResponse(200), nil
 				},
-				CreateInstanceFunc: func(ctx context.Context, org string, req bmm.InstanceCreateRequest) (*bmm.Instance, *http.Response, error) {
+				CreateInstanceFunc: func(ctx context.Context, org string, req nico.InstanceCreateRequest) (*nico.Instance, *http.Response, error) {
 					createInstanceCalled = true
 					return nil, nil, fmt.Errorf("should not be called")
 				},
 			}
 
-			nvidiaCarbideMachine.Finalizers = []string{NvidiaCarbideMachineFinalizer}
+			nvidiaCarbideMachine.Finalizers = []string{NcxInfraMachineFinalizer}
 
 			scheme := newTestScheme()
 			k8sClient := fake.NewClientBuilder().
 				WithScheme(scheme).
 				WithObjects(cluster, machine, nvidiaCarbideCluster, nvidiaCarbideMachine, credsSecret, bootstrapSecret).
 				WithStatusSubresource(
-					&infrastructurev1.NvidiaCarbideMachine{},
-					&infrastructurev1.NvidiaCarbideCluster{},
+					&infrastructurev1.NcxInfraMachine{},
+					&infrastructurev1.NcxInfraCluster{},
 					&clusterv1.Machine{},
 				).
 				Build()
 
-			reconciler := &NvidiaCarbideMachineReconciler{
+			reconciler := &NcxInfraMachineReconciler{
 				Client:              k8sClient,
 				Scheme:              scheme,
-				NvidiaCarbideClient: mockClient,
+				NcxInfraClient: mockClient,
 				OrgName:             orgName,
 			}
 
@@ -508,7 +508,7 @@ var _ = Describe("NvidiaCarbideMachine Controller", func() {
 			Expect(result.Requeue).To(BeFalse()) //nolint:staticcheck // checking Requeue field
 			Expect(createInstanceCalled).To(BeFalse())
 
-			updatedMachine := &infrastructurev1.NvidiaCarbideMachine{}
+			updatedMachine := &infrastructurev1.NcxInfraMachine{}
 			Expect(k8sClient.Get(ctx, namespacedName, updatedMachine)).To(Succeed())
 			Expect(updatedMachine.Status.InstanceID).To(Equal(existingInstanceID))
 			Expect(updatedMachine.Status.Ready).To(BeTrue())

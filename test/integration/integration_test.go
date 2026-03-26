@@ -36,8 +36,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	infrastructurev1beta1 "github.com/fabiendupont/cluster-api-provider-nvidia-carbide/api/v1beta1"
-	"github.com/fabiendupont/cluster-api-provider-nvidia-carbide/internal/controller"
+	infrastructurev1beta1 "github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/api/v1beta1"
+	"github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/internal/controller"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
@@ -93,13 +93,13 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).ToNot(HaveOccurred())
 
-	err = (&controller.NvidiaCarbideClusterReconciler{
+	err = (&controller.NcxInfraClusterReconciler{
 		Client: k8sManager.GetClient(),
 		Scheme: k8sManager.GetScheme(),
 	}).SetupWithManager(ctx, k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
-	err = (&controller.NvidiaCarbideMachineReconciler{
+	err = (&controller.NcxInfraMachineReconciler{
 		Client: k8sManager.GetClient(),
 		Scheme: k8sManager.GetScheme(),
 	}).SetupWithManager(k8sManager)
@@ -119,11 +119,11 @@ var _ = AfterSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 })
 
-var _ = Describe("NvidiaCarbideCluster Integration", func() {
+var _ = Describe("NcxInfraCluster Integration", func() {
 	var (
 		namespace            *corev1.Namespace
 		cluster              *clusterv1.Cluster
-		nvidiaCarbideCluster *infrastructurev1beta1.NvidiaCarbideCluster
+		nvidiaCarbideCluster *infrastructurev1beta1.NcxInfraCluster
 		credSecret           *corev1.Secret
 	)
 
@@ -139,7 +139,7 @@ var _ = Describe("NvidiaCarbideCluster Integration", func() {
 		// Create credentials secret
 		credSecret = &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "nvidia-carbide-creds",
+				Name:      "ncx-infra-creds",
 				Namespace: namespace.Name,
 			},
 			Data: map[string][]byte{
@@ -159,15 +159,15 @@ var _ = Describe("NvidiaCarbideCluster Integration", func() {
 			Spec: clusterv1.ClusterSpec{
 				InfrastructureRef: clusterv1.ContractVersionedObjectReference{
 					APIGroup: "infrastructure.cluster.x-k8s.io",
-					Kind:     "NvidiaCarbideCluster",
+					Kind:     "NcxInfraCluster",
 					Name:     "test-cluster",
 				},
 			},
 		}
 		Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 
-		// Create NvidiaCarbideCluster
-		nvidiaCarbideCluster = &infrastructurev1beta1.NvidiaCarbideCluster{
+		// Create NcxInfraCluster
+		nvidiaCarbideCluster = &infrastructurev1beta1.NcxInfraCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-cluster",
 				Namespace: namespace.Name,
@@ -180,7 +180,7 @@ var _ = Describe("NvidiaCarbideCluster Integration", func() {
 					},
 				},
 			},
-			Spec: infrastructurev1beta1.NvidiaCarbideClusterSpec{
+			Spec: infrastructurev1beta1.NcxInfraClusterSpec{
 				SiteRef: infrastructurev1beta1.SiteReference{
 					ID: "8a880c71-fe4b-4e43-9e24-ebfcb8a84c5f",
 				},
@@ -217,24 +217,24 @@ var _ = Describe("NvidiaCarbideCluster Integration", func() {
 		Expect(k8sClient.Delete(ctx, namespace)).To(Succeed())
 	})
 
-	It("should add finalizer to NvidiaCarbideCluster", func() {
+	It("should add finalizer to NcxInfraCluster", func() {
 		Eventually(func() []string {
-			updated := &infrastructurev1beta1.NvidiaCarbideCluster{}
+			updated := &infrastructurev1beta1.NcxInfraCluster{}
 			err := k8sClient.Get(ctx, client.ObjectKeyFromObject(nvidiaCarbideCluster), updated)
 			if err != nil {
 				return nil
 			}
 			return updated.Finalizers
-		}, 10*time.Second, 500*time.Millisecond).Should(ContainElement(controller.NvidiaCarbideClusterFinalizer))
+		}, 10*time.Second, 500*time.Millisecond).Should(ContainElement(controller.NcxInfraClusterFinalizer))
 	})
 
 	It("should handle missing owner cluster gracefully", func() {
-		orphanCluster := &infrastructurev1beta1.NvidiaCarbideCluster{
+		orphanCluster := &infrastructurev1beta1.NcxInfraCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "orphan-cluster",
 				Namespace: namespace.Name,
 			},
-			Spec: infrastructurev1beta1.NvidiaCarbideClusterSpec{
+			Spec: infrastructurev1beta1.NcxInfraClusterSpec{
 				SiteRef: infrastructurev1beta1.SiteReference{
 					ID: "8a880c71-fe4b-4e43-9e24-ebfcb8a84c5f",
 				},
@@ -261,20 +261,20 @@ var _ = Describe("NvidiaCarbideCluster Integration", func() {
 
 		// Should not panic or error out
 		Consistently(func() bool {
-			updated := &infrastructurev1beta1.NvidiaCarbideCluster{}
+			updated := &infrastructurev1beta1.NcxInfraCluster{}
 			err := k8sClient.Get(ctx, client.ObjectKeyFromObject(orphanCluster), updated)
 			return err == nil
 		}, 3*time.Second, 500*time.Millisecond).Should(BeTrue())
 	})
 })
 
-var _ = Describe("NvidiaCarbideMachine Integration", func() {
+var _ = Describe("NcxInfraMachine Integration", func() {
 	var (
 		namespace            *corev1.Namespace
 		cluster              *clusterv1.Cluster
-		nvidiaCarbideCluster *infrastructurev1beta1.NvidiaCarbideCluster
+		nvidiaCarbideCluster *infrastructurev1beta1.NcxInfraCluster
 		machine              *clusterv1.Machine
-		nvidiaCarbideMachine *infrastructurev1beta1.NvidiaCarbideMachine
+		nvidiaCarbideMachine *infrastructurev1beta1.NcxInfraMachine
 		credSecret           *corev1.Secret
 		bootstrapSecret      *corev1.Secret
 	)
@@ -291,7 +291,7 @@ var _ = Describe("NvidiaCarbideMachine Integration", func() {
 		// Create credentials secret
 		credSecret = &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "nvidia-carbide-creds",
+				Name:      "ncx-infra-creds",
 				Namespace: namespace.Name,
 			},
 			Data: map[string][]byte{
@@ -323,20 +323,20 @@ var _ = Describe("NvidiaCarbideMachine Integration", func() {
 			Spec: clusterv1.ClusterSpec{
 				InfrastructureRef: clusterv1.ContractVersionedObjectReference{
 					APIGroup: "infrastructure.cluster.x-k8s.io",
-					Kind:     "NvidiaCarbideCluster",
+					Kind:     "NcxInfraCluster",
 					Name:     "test-cluster",
 				},
 			},
 		}
 		Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 
-		// Create NvidiaCarbideCluster (already ready)
-		nvidiaCarbideCluster = &infrastructurev1beta1.NvidiaCarbideCluster{
+		// Create NcxInfraCluster (already ready)
+		nvidiaCarbideCluster = &infrastructurev1beta1.NcxInfraCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-cluster",
 				Namespace: namespace.Name,
 			},
-			Spec: infrastructurev1beta1.NvidiaCarbideClusterSpec{
+			Spec: infrastructurev1beta1.NcxInfraClusterSpec{
 				SiteRef: infrastructurev1beta1.SiteReference{
 					ID: "8a880c71-fe4b-4e43-9e24-ebfcb8a84c5f",
 				},
@@ -388,7 +388,7 @@ var _ = Describe("NvidiaCarbideMachine Integration", func() {
 				},
 				InfrastructureRef: clusterv1.ContractVersionedObjectReference{
 					APIGroup: "infrastructure.cluster.x-k8s.io",
-					Kind:     "NvidiaCarbideMachine",
+					Kind:     "NcxInfraMachine",
 					Name:     "test-machine",
 				},
 			},
@@ -398,8 +398,8 @@ var _ = Describe("NvidiaCarbideMachine Integration", func() {
 		// Re-fetch machine to get UID assigned by API server
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(machine), machine)).To(Succeed())
 
-		// Create NvidiaCarbideMachine
-		nvidiaCarbideMachine = &infrastructurev1beta1.NvidiaCarbideMachine{
+		// Create NcxInfraMachine
+		nvidiaCarbideMachine = &infrastructurev1beta1.NcxInfraMachine{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-machine",
 				Namespace: namespace.Name,
@@ -415,7 +415,7 @@ var _ = Describe("NvidiaCarbideMachine Integration", func() {
 					clusterv1.ClusterNameLabel: cluster.Name,
 				},
 			},
-			Spec: infrastructurev1beta1.NvidiaCarbideMachineSpec{
+			Spec: infrastructurev1beta1.NcxInfraMachineSpec{
 				InstanceType: infrastructurev1beta1.InstanceTypeSpec{
 					ID: "eaaf1d9d-7322-442e-b23f-3275d3e48198",
 				},
@@ -433,25 +433,25 @@ var _ = Describe("NvidiaCarbideMachine Integration", func() {
 		Expect(k8sClient.Delete(ctx, namespace)).To(Succeed())
 	})
 
-	It("should add finalizer to NvidiaCarbideMachine", func() {
+	It("should add finalizer to NcxInfraMachine", func() {
 		Eventually(func() []string {
-			updated := &infrastructurev1beta1.NvidiaCarbideMachine{}
+			updated := &infrastructurev1beta1.NcxInfraMachine{}
 			err := k8sClient.Get(ctx, client.ObjectKeyFromObject(nvidiaCarbideMachine), updated)
 			if err != nil {
 				return nil
 			}
 			return updated.Finalizers
-		}, 10*time.Second, 500*time.Millisecond).Should(ContainElement(controller.NvidiaCarbideMachineFinalizer))
+		}, 10*time.Second, 500*time.Millisecond).Should(ContainElement(controller.NcxInfraMachineFinalizer))
 	})
 
 	It("should wait for cluster to be ready before provisioning", func() {
 		// Create machine with cluster not ready
-		notReadyCluster := &infrastructurev1beta1.NvidiaCarbideCluster{
+		notReadyCluster := &infrastructurev1beta1.NcxInfraCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "not-ready-cluster",
 				Namespace: namespace.Name,
 			},
-			Spec: infrastructurev1beta1.NvidiaCarbideClusterSpec{
+			Spec: infrastructurev1beta1.NcxInfraClusterSpec{
 				SiteRef: infrastructurev1beta1.SiteReference{
 					ID: "8a880c71-fe4b-4e43-9e24-ebfcb8a84c5f",
 				},
@@ -473,7 +473,7 @@ var _ = Describe("NvidiaCarbideMachine Integration", func() {
 					},
 				},
 			},
-			Status: infrastructurev1beta1.NvidiaCarbideClusterStatus{
+			Status: infrastructurev1beta1.NcxInfraClusterStatus{
 				Ready: false, // Not ready
 			},
 		}
@@ -487,14 +487,14 @@ var _ = Describe("NvidiaCarbideMachine Integration", func() {
 			Spec: clusterv1.ClusterSpec{
 				InfrastructureRef: clusterv1.ContractVersionedObjectReference{
 					APIGroup: "infrastructure.cluster.x-k8s.io",
-					Kind:     "NvidiaCarbideCluster",
+					Kind:     "NcxInfraCluster",
 					Name:     "not-ready-cluster",
 				},
 			},
 		}
 		Expect(k8sClient.Create(ctx, capiCluster)).To(Succeed())
 
-		waitingMachine := &infrastructurev1beta1.NvidiaCarbideMachine{
+		waitingMachine := &infrastructurev1beta1.NcxInfraMachine{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "waiting-machine",
 				Namespace: namespace.Name,
@@ -507,7 +507,7 @@ var _ = Describe("NvidiaCarbideMachine Integration", func() {
 
 		// Should not provision instance (no instance ID in status)
 		Consistently(func() string {
-			updated := &infrastructurev1beta1.NvidiaCarbideMachine{}
+			updated := &infrastructurev1beta1.NcxInfraMachine{}
 			err := k8sClient.Get(ctx, client.ObjectKeyFromObject(waitingMachine), updated)
 			if err != nil {
 				return ""
@@ -522,7 +522,7 @@ var _ = Describe("NvidiaCarbideMachine Integration", func() {
 
 		// Should be removed eventually (after finalizer processing)
 		Eventually(func() bool {
-			updated := &infrastructurev1beta1.NvidiaCarbideMachine{}
+			updated := &infrastructurev1beta1.NcxInfraMachine{}
 			err := k8sClient.Get(ctx, client.ObjectKeyFromObject(nvidiaCarbideMachine), updated)
 			return err != nil
 		}, 10*time.Second, 500*time.Millisecond).Should(BeTrue())

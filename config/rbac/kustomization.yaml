@@ -20,15 +20,15 @@ resources:
 - metrics_reader_role.yaml
 # For each CRD, "Admin", "Editor" and "Viewer" roles are scaffolded by
 # default, aiding admins in cluster management. Those roles are
-# not used by the cluster-api-provider-nvidia-carbide itself. You can comment the following lines
+# not used by the cluster-api-provider-nvidia-ncx-infra-controller itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
-- nvidiacarbidemachinetemplate_admin_role.yaml
-- nvidiacarbidemachinetemplate_editor_role.yaml
-- nvidiacarbidemachinetemplate_viewer_role.yaml
-- nvidiacarbidemachine_admin_role.yaml
-- nvidiacarbidemachine_editor_role.yaml
-- nvidiacarbidemachine_viewer_role.yaml
-- nvidiacarbidecluster_admin_role.yaml
-- nvidiacarbidecluster_editor_role.yaml
-- nvidiacarbidecluster_viewer_role.yaml
+- ncxinframachinetemplate_admin_role.yaml
+- ncxinframachinetemplate_editor_role.yaml
+- ncxinframachinetemplate_viewer_role.yaml
+- ncxinframachine_admin_role.yaml
+- ncxinframachine_editor_role.yaml
+- ncxinframachine_viewer_role.yaml
+- ncxinfracluster_admin_role.yaml
+- ncxinfracluster_editor_role.yaml
+- ncxinfracluster_viewer_role.yaml
 

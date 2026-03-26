@@ -1,18 +1,20 @@
-# Cluster API Provider for NVIDIA Carbide
+# Cluster API Provider for NVIDIA NCX Infra Controller
 
-A Kubernetes Cluster API infrastructure provider for managing bare-metal clusters on NVIDIA Carbide platform.
+A Kubernetes Cluster API infrastructure provider for managing bare-metal clusters on the NVIDIA NCX Infra Controller platform.
 
 ## Overview
 
-This project implements a Kubernetes Cluster API (CAPI) infrastructure provider for NVIDIA Carbide, using an auto-generated Go client from the NVIDIA Carbide REST API OpenAPI specification.
+This project implements a Kubernetes Cluster API (CAPI) infrastructure provider for NVIDIA NCX Infra Controller, using an auto-generated Go client from the NCX Infra Controller REST API OpenAPI specification.
 
 ### Features
 
-- **NvidiaCarbideCluster Controller**: Manages VPC, subnets, and network security groups
-- **NvidiaCarbideMachine Controller**: Provisions bare-metal instances with full lifecycle management
+- **NcxInfraCluster Controller**: Manages VPC, subnets, network security groups, and VPC peering
+- **NcxInfraMachine Controller**: Provisions bare-metal instances with full lifecycle management
 - **Multi-tenancy Support**: Tenant-scoped resource isolation
 - **Network Virtualization**: Support for ETHERNET_VIRTUALIZER and FNN
-- **Provider ID**: `nvidia-carbide://org/tenant/site/instance-id` format for node correlation
+- **VPC Peering**: Cross-VPC network connectivity
+- **Explicit IP Selection**: Request specific IP addresses for VPC Prefix interfaces
+- **Provider ID**: `ncx-infra://org/tenant/site/instance-id` format for node correlation
 - **Bootstrap Integration**: Works with kubeadm and k3s bootstrap providers
 - **IP Block Auto-Management**: Automatic creation and management of IP blocks for subnet allocation (Kubernetes-native CIDR notation)
 - **Type-Safe API Client**: Auto-generated from OpenAPI 3.1 specification (zero maintenance)
@@ -23,15 +25,15 @@ This project implements a Kubernetes Cluster API (CAPI) infrastructure provider 
 ┌─────────────────────────────────────────────────────────────┐
 │           Management Kubernetes Cluster                     │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │  CAPI Core + NVIDIA Carbide Infrastructure Provider   │  │
-│  │  • NvidiaCarbideCluster controller                    │  │
-│  │  • NvidiaCarbideMachine controller                    │  │
+│  │  CAPI Core + NCX Infra Controller Provider            │  │
+│  │  • NcxInfraCluster controller                    │  │
+│  │  • NcxInfraMachine controller                    │  │
 │  └───────────────────────────────────────────────────────┘  │
 │                        ↓ REST API (JWT)                     │
 └─────────────────────────────────────────────────────────────┘
                          ↓
 ┌─────────────────────────────────────────────────────────────┐
-│              NVIDIA Carbide Platform                        │
+│          NVIDIA NCX Infra Controller Platform               │
 │  • VPC/Networking    • Instance Lifecycle                   │
 │  • Site Management   • Machine Allocation                   │
 │  • Multi-tenancy     • Health Monitoring                    │
@@ -50,7 +52,7 @@ This project implements a Kubernetes Cluster API (CAPI) infrastructure provider 
 - Docker version 17.03+
 - kubectl version v1.28+
 - Kubernetes management cluster with Cluster API v1.12+ installed
-- Access to NVIDIA Carbide REST API with JWT authentication
+- Access to NCX Infra Controller REST API with JWT authentication
 
 ## Installation
 
@@ -62,15 +64,15 @@ Configure `~/.cluster-api/clusterctl.yaml` to register the provider:
 
 ```yaml
 providers:
-  - name: nvidia-carbide
-    url: https://github.com/fabiendupont/cluster-api-provider-nvidia-carbide/releases/latest/infrastructure-components.yaml
+  - name: nvidia-ncx-infra-controller
+    url: https://github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/releases/latest/infrastructure-components.yaml
     type: InfrastructureProvider
 ```
 
 Then install:
 
 ```bash
-clusterctl init --infrastructure nvidia-carbide
+clusterctl init --infrastructure nvidia-ncx-infra-controller
 ```
 
 ### Option B: OLM (OpenShift)
@@ -82,26 +84,26 @@ kubectl apply -f - <<EOF
 apiVersion: operators.coreos.com/v1alpha1
 kind: CatalogSource
 metadata:
-  name: nvidia-carbide-catalog
+  name: nvidia-ncx-infra-controller-catalog
   namespace: openshift-marketplace
 spec:
   sourceType: grpc
-  image: ghcr.io/fabiendupont/cluster-api-provider-nvidia-carbide-catalog:v0.1.0
-  displayName: NVIDIA Carbide
+  image: ghcr.io/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller-catalog:v0.1.0
+  displayName: NVIDIA NCX Infra Controller
 EOF
 ```
 
-The operator appears in OperatorHub as **Cluster API Provider NVIDIA Carbide**.
+The operator appears in OperatorHub as **Cluster API Provider NVIDIA NCX Infra Controller**.
 
 ### Option C: Manual (kustomize)
 
 ```bash
 # Build and push Docker image
-make docker-build docker-push IMG=<your-registry>/cluster-api-provider-nvidia-carbide:latest
+make docker-build docker-push IMG=<your-registry>/cluster-api-provider-nvidia-ncx-infra-controller:latest
 
 # Install CRDs and deploy controller
 make install
-make deploy IMG=<your-registry>/cluster-api-provider-nvidia-carbide:latest
+make deploy IMG=<your-registry>/cluster-api-provider-nvidia-ncx-infra-controller:latest
 ```
 
 ### Create Credentials Secret
@@ -109,7 +111,7 @@ make deploy IMG=<your-registry>/cluster-api-provider-nvidia-carbide:latest
 Regardless of installation method, create a credentials secret:
 
 ```bash
-kubectl create secret generic nvidia-carbide-credentials \
+kubectl create secret generic ncx-infra-credentials \
   --from-literal=endpoint="https://api.carbide.nvidia.com" \
   --from-literal=orgName="your-org-name" \
   --from-literal=token="your-jwt-token" \
@@ -121,14 +123,14 @@ kubectl create secret generic nvidia-carbide-credentials \
 ### Create a Cluster with clusterctl
 
 ```bash
-export NVIDIA_CARBIDE_SITE_NAME="my-site"
-export NVIDIA_CARBIDE_TENANT_ID="your-tenant-uuid"
-export NVIDIA_CARBIDE_CONTROL_PLANE_INSTANCE_TYPE_ID="instance-type-uuid"
-export NVIDIA_CARBIDE_WORKER_INSTANCE_TYPE_ID="instance-type-uuid"
-export NVIDIA_CARBIDE_SSH_KEY_GROUP_ID="ssh-key-group-uuid"
+export NCX_INFRA_SITE_NAME="my-site"
+export NCX_INFRA_TENANT_ID="your-tenant-uuid"
+export NCX_INFRA_CONTROL_PLANE_INSTANCE_TYPE_ID="instance-type-uuid"
+export NCX_INFRA_WORKER_INSTANCE_TYPE_ID="instance-type-uuid"
+export NCX_INFRA_SSH_KEY_GROUP_ID="ssh-key-group-uuid"
 
 clusterctl generate cluster my-cluster \
-  --infrastructure nvidia-carbide \
+  --infrastructure nvidia-ncx-infra-controller \
   --kubernetes-version v1.28.0 \
   --control-plane-machine-count 3 \
   --worker-machine-count 3 \
@@ -150,11 +152,11 @@ spec:
       cidrBlocks: ["10.96.0.0/12"]
   infrastructureRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-    kind: NvidiaCarbideCluster
+    kind: NcxInfraCluster
     name: my-cluster
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-kind: NvidiaCarbideCluster
+kind: NcxInfraCluster
 metadata:
   name: my-cluster
 spec:
@@ -171,30 +173,32 @@ spec:
       cidr: "10.100.2.0/24"
   authentication:
     secretRef:
-      name: nvidia-carbide-credentials
+      name: ncx-infra-credentials
 ```
 
 See `config/samples/cluster-template.yaml` for a complete example with control plane, workers, and bootstrap configuration.
 
 ## Configuration
 
-### NvidiaCarbideCluster
+### NcxInfraCluster
 
 | Field | Description |
 |-------|-------------|
-| `siteRef` | Reference to NVIDIA Carbide Site (name or ID) |
-| `tenantID` | NVIDIA Carbide tenant ID for multi-tenancy |
+| `siteRef` | Reference to Site (name or ID) |
+| `tenantID` | Tenant ID for multi-tenancy |
 | `vpc.networkVirtualizationType` | `ETHERNET_VIRTUALIZER` or `FNN` |
 | `subnets` | List of subnets (use Kubernetes-native CIDR notation) |
 | `subnets[].cidr` | Subnet CIDR (e.g., `10.0.1.0/24`) - IP blocks are auto-managed |
 | `vpc.networkSecurityGroup` | Optional NSG configuration |
+| `vpcPeerings` | Optional VPC peering connections to other VPCs |
 
-### NvidiaCarbideMachine
+### NcxInfraMachine
 
 | Field | Description |
 |-------|-------------|
 | `instanceType.id` | Instance type UUID (or use `machineID` for specific machine) |
 | `network.subnetName` | Subnet to attach the machine to |
+| `network.ipAddress` | Explicit IP for VPC Prefix interfaces |
 | `network.additionalInterfaces` | Additional NICs for multi-network configurations |
 | `sshKeyGroups` | SSH key group IDs |
 
@@ -229,7 +233,7 @@ make docker-build         # Build Docker image
 
 ```bash
 # clusterctl release artifacts (infrastructure-components.yaml, metadata.yaml, cluster-template.yaml)
-make release IMG=ghcr.io/fabiendupont/cluster-api-provider-nvidia-carbide:v0.1.0
+make release IMG=ghcr.io/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller:v0.1.0
 
 # OLM bundle image
 make bundle-build bundle-push
@@ -241,7 +245,7 @@ make catalog-build catalog-push
 ### Project Structure
 
 ```
-cluster-api-provider-nvidia-carbide/
+cluster-api-provider-nvidia-ncx-infra-controller/
 ├── api/v1beta1/              # CRD type definitions
 ├── internal/controller/      # Cluster and Machine controllers
 ├── pkg/
@@ -261,14 +265,14 @@ cluster-api-provider-nvidia-carbide/
 ### Check Controller Logs
 
 ```bash
-kubectl logs -n cluster-api-provider-nvidia-carbide-system \
-  deployment/cluster-api-provider-nvidia-carbide-controller-manager
+kubectl logs -n cluster-api-provider-nvidia-ncx-infra-controller-system \
+  deployment/cluster-api-provider-nvidia-ncx-infra-controller-controller-manager
 ```
 
 ### Verify Cluster Status
 
 ```bash
-kubectl describe nvidiacarbidecluster my-cluster
+kubectl describe ncxinfracluster my-cluster
 kubectl get machines -w
 ```
 
@@ -280,8 +284,8 @@ kubectl get machines -w
 
 ## Related Projects
 
-- **[machine-api-provider-nvidia-carbide](../machine-api-provider-nvidia-carbide)** - OpenShift Machine API provider
-- **[cloud-provider-nvidia-carbide](../cloud-provider-nvidia-carbide)** - Kubernetes Cloud Controller Manager
+- **[machine-api-provider-nvidia-ncx-infra-controller](../machine-api-provider-nvidia-ncx-infra-controller)** - OpenShift Machine API provider
+- **[cloud-provider-nvidia-ncx-infra-controller](../cloud-provider-nvidia-ncx-infra-controller)** - Kubernetes Cloud Controller Manager
 
 ## License
 

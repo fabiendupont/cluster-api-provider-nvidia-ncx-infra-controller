@@ -1,0 +1,24 @@
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: NcxInfraMachine
+metadata:
+  labels:
+    app.kubernetes.io/name: cluster-api-provider-nvidia-ncx-infra-controller
+    app.kubernetes.io/managed-by: kustomize
+  name: ncxinframachine-sample
+spec:
+  instanceType:
+    id: "00000000-0000-0000-0000-000000000010"
+  operatingSystem:
+    id: "00000000-0000-0000-0000-000000000020"
+  network:
+    subnetName: control-plane
+    # Explicit IP (VPC Prefix interfaces only):
+    # ipAddress: "10.0.1.11"
+    # additionalInterfaces:
+    #   - vpcPrefixName: gpu-prefix
+    #     ipAddress: "10.0.3.11"
+  sshKeyGroups:
+    - "00000000-0000-0000-0000-000000000030"
+  labels:
+    role: control-plane
+  phoneHomeEnabled: true

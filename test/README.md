@@ -65,9 +65,9 @@ E2E tests require a real NVIDIA Carbide environment and test full cluster lifecy
 
 ```bash
 # Set environment variables
-export NVIDIA_CARBIDE_API_ENDPOINT="https://api.carbide.nvidia.com"
-export NVIDIA_CARBIDE_ORG_NAME="your-org"
-export NVIDIA_CARBIDE_API_TOKEN="your-jwt-token"
+export NCX_INFRA_API_ENDPOINT="https://api.carbide.nvidia.com"
+export NCX_INFRA_ORG_NAME="your-org"
+export NCX_INFRA_API_TOKEN="your-jwt-token"
 export E2E_SITE_ID="site-uuid"
 export E2E_TENANT_ID="tenant-uuid"
 export E2E_INSTANCE_TYPE_ID="instance-type-uuid"
@@ -100,7 +100,7 @@ Tests all NVIDIA Carbide API operations:
 
 ### Controller Unit Tests
 
-**NvidiaCarbideCluster Controller:**
+**NcxInfraCluster Controller:**
 - ✅ VPC provisioning
 - ✅ Subnet creation
 - ✅ NSG configuration
@@ -108,7 +108,7 @@ Tests all NVIDIA Carbide API operations:
 - ✅ Deletion with finalizers
 - ✅ Status conditions
 
-**NvidiaCarbideMachine Controller:**
+**NcxInfraMachine Controller:**
 - ✅ Instance creation with bootstrap data
 - ✅ Provider ID generation
 - ✅ Status updates (Pending → Provisioning → Ready)
@@ -203,7 +203,7 @@ make test-coverage
 ginkgo -v ./test/integration
 
 # Run specific test
-ginkgo -focus="NvidiaCarbideCluster" ./test/integration
+ginkgo -focus="NcxInfraCluster" ./test/integration
 ```
 
 ### E2E Tests

@@ -27,38 +27,38 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-// +kubebuilder:webhook:path=/validate-infrastructure-cluster-x-k8s-io-v1beta1-nvidiacarbidemachine,mutating=false,failurePolicy=fail,sideEffects=None,groups=infrastructure.cluster.x-k8s.io,resources=nvidiacarbidemachines,verbs=create;update,versions=v1beta1,name=vnvidiacarbidemachine.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-infrastructure-cluster-x-k8s-io-v1beta1-ncxinframachine,mutating=false,failurePolicy=fail,sideEffects=None,groups=infrastructure.cluster.x-k8s.io,resources=ncxinframachines,verbs=create;update,versions=v1beta1,name=vncxinframachine.kb.io,admissionReviewVersions=v1
 
-var _ webhook.CustomValidator = &NvidiaCarbideMachine{}
+var _ webhook.CustomValidator = &NcxInfraMachine{}
 
-func (r *NvidiaCarbideMachine) SetupWebhookWithManager(mgr ctrl.Manager) error {
+func (r *NcxInfraMachine) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(r).
 		WithValidator(r).
 		Complete()
 }
 
-func (r *NvidiaCarbideMachine) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
-	machine, ok := obj.(*NvidiaCarbideMachine)
+func (r *NcxInfraMachine) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
+	machine, ok := obj.(*NcxInfraMachine)
 	if !ok {
-		return nil, fmt.Errorf("expected NvidiaCarbideMachine, got %T", obj)
+		return nil, fmt.Errorf("expected NcxInfraMachine, got %T", obj)
 	}
 	return nil, machine.validateMachine().ToAggregate()
 }
 
-func (r *NvidiaCarbideMachine) ValidateUpdate(_ context.Context, _, newObj runtime.Object) (admission.Warnings, error) {
-	machine, ok := newObj.(*NvidiaCarbideMachine)
+func (r *NcxInfraMachine) ValidateUpdate(_ context.Context, _, newObj runtime.Object) (admission.Warnings, error) {
+	machine, ok := newObj.(*NcxInfraMachine)
 	if !ok {
-		return nil, fmt.Errorf("expected NvidiaCarbideMachine, got %T", newObj)
+		return nil, fmt.Errorf("expected NcxInfraMachine, got %T", newObj)
 	}
 	return nil, machine.validateMachine().ToAggregate()
 }
 
-func (r *NvidiaCarbideMachine) ValidateDelete(_ context.Context, _ runtime.Object) (admission.Warnings, error) {
+func (r *NcxInfraMachine) ValidateDelete(_ context.Context, _ runtime.Object) (admission.Warnings, error) {
 	return nil, nil
 }
 
-func (r *NvidiaCarbideMachine) validateMachine() field.ErrorList {
+func (r *NcxInfraMachine) validateMachine() field.ErrorList {
 	var allErrs field.ErrorList
 	specPath := field.NewPath("spec")
 

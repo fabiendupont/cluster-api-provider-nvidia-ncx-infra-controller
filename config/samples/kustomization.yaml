@@ -1,6 +1,6 @@
 ## Append samples of your project ##
 resources:
-- infrastructure_v1beta1_nvidiacarbidecluster.yaml
-- infrastructure_v1beta1_nvidiacarbidemachine.yaml
-- infrastructure_v1beta1_nvidiacarbidemachinetemplate.yaml
+- infrastructure_v1beta1_ncxinfracluster.yaml
+- infrastructure_v1beta1_ncxinframachine.yaml
+- infrastructure_v1beta1_ncxinframachinetemplate.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

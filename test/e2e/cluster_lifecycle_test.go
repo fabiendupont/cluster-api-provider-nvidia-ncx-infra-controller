@@ -33,7 +33,7 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	infrastructurev1beta1 "github.com/fabiendupont/cluster-api-provider-nvidia-carbide/api/v1beta1"
+	infrastructurev1beta1 "github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
@@ -99,9 +99,9 @@ var _ = Describe("NVIDIA Carbide Cluster Lifecycle E2E", func() {
 					Namespace: testNamespace,
 				},
 				Data: map[string][]byte{
-					"endpoint": []byte(os.Getenv("NVIDIA_CARBIDE_API_ENDPOINT")),
-					"orgName":  []byte(os.Getenv("NVIDIA_CARBIDE_ORG_NAME")),
-					"token":    []byte(os.Getenv("NVIDIA_CARBIDE_API_TOKEN")),
+					"endpoint": []byte(os.Getenv("NCX_INFRA_API_ENDPOINT")),
+					"orgName":  []byte(os.Getenv("NCX_INFRA_ORG_NAME")),
+					"token":    []byte(os.Getenv("NCX_INFRA_API_TOKEN")),
 				},
 			}
 			Expect(k8sClient.Create(ctx, secret)).To(Succeed())
@@ -123,20 +123,20 @@ var _ = Describe("NVIDIA Carbide Cluster Lifecycle E2E", func() {
 					},
 					InfrastructureRef: clusterv1.ContractVersionedObjectReference{
 						APIGroup:  "infrastructure.cluster.x-k8s.io",
-						Kind:      "NvidiaCarbideCluster",
+						Kind:      "NcxInfraCluster",
 						Name:      clusterName,
 					},
 				},
 			}
 			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 
-			By("Creating NvidiaCarbideCluster")
-			nvidiaCarbideCluster := &infrastructurev1beta1.NvidiaCarbideCluster{
+			By("Creating NcxInfraCluster")
+			nvidiaCarbideCluster := &infrastructurev1beta1.NcxInfraCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      clusterName,
 					Namespace: testNamespace,
 				},
-				Spec: infrastructurev1beta1.NvidiaCarbideClusterSpec{
+				Spec: infrastructurev1beta1.NcxInfraClusterSpec{
 					SiteRef: infrastructurev1beta1.SiteReference{
 						ID: siteID,
 					},
@@ -171,7 +171,7 @@ var _ = Describe("NVIDIA Carbide Cluster Lifecycle E2E", func() {
 			}
 			Expect(k8sClient.Create(ctx, nvidiaCarbideCluster)).To(Succeed())
 
-			By("Waiting for NvidiaCarbideCluster to be ready")
+			By("Waiting for NcxInfraCluster to be ready")
 			Eventually(func() bool {
 				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(nvidiaCarbideCluster), nvidiaCarbideCluster)
 				if err != nil {
@@ -209,7 +209,7 @@ var _ = Describe("NVIDIA Carbide Cluster Lifecycle E2E", func() {
 						},
 						InfrastructureRef: clusterv1.ContractVersionedObjectReference{
 							APIGroup:  "infrastructure.cluster.x-k8s.io",
-							Kind:      "NvidiaCarbideMachine",
+							Kind:      "NcxInfraMachine",
 							Name:      machineName,
 						},
 					},
@@ -228,7 +228,7 @@ var _ = Describe("NVIDIA Carbide Cluster Lifecycle E2E", func() {
 				}
 				Expect(k8sClient.Create(ctx, bootstrapSecret)).To(Succeed())
 
-				nvidiaCarbideMachine := &infrastructurev1beta1.NvidiaCarbideMachine{
+				nvidiaCarbideMachine := &infrastructurev1beta1.NcxInfraMachine{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      machineName,
 						Namespace: testNamespace,
@@ -237,7 +237,7 @@ var _ = Describe("NVIDIA Carbide Cluster Lifecycle E2E", func() {
 							clusterv1.MachineControlPlaneLabel: "",
 						},
 					},
-					Spec: infrastructurev1beta1.NvidiaCarbideMachineSpec{
+					Spec: infrastructurev1beta1.NcxInfraMachineSpec{
 						InstanceType: infrastructurev1beta1.InstanceTypeSpec{
 							ID: os.Getenv("E2E_INSTANCE_TYPE_ID"),
 						},
@@ -274,7 +274,7 @@ var _ = Describe("NVIDIA Carbide Cluster Lifecycle E2E", func() {
 						},
 						InfrastructureRef: clusterv1.ContractVersionedObjectReference{
 							APIGroup:  "infrastructure.cluster.x-k8s.io",
-							Kind:      "NvidiaCarbideMachine",
+							Kind:      "NcxInfraMachine",
 							Name:      machineName,
 						},
 					},
@@ -293,7 +293,7 @@ var _ = Describe("NVIDIA Carbide Cluster Lifecycle E2E", func() {
 				}
 				Expect(k8sClient.Create(ctx, bootstrapSecret)).To(Succeed())
 
-				nvidiaCarbideMachine := &infrastructurev1beta1.NvidiaCarbideMachine{
+				nvidiaCarbideMachine := &infrastructurev1beta1.NcxInfraMachine{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      machineName,
 						Namespace: testNamespace,
@@ -301,7 +301,7 @@ var _ = Describe("NVIDIA Carbide Cluster Lifecycle E2E", func() {
 							clusterv1.ClusterNameLabel: clusterName,
 						},
 					},
-					Spec: infrastructurev1beta1.NvidiaCarbideMachineSpec{
+					Spec: infrastructurev1beta1.NcxInfraMachineSpec{
 						InstanceType: infrastructurev1beta1.InstanceTypeSpec{
 							ID: os.Getenv("E2E_INSTANCE_TYPE_ID"),
 						},
@@ -320,7 +320,7 @@ var _ = Describe("NVIDIA Carbide Cluster Lifecycle E2E", func() {
 
 			By("Waiting for all machines to be provisioned")
 			Eventually(func() int {
-				machineList := &infrastructurev1beta1.NvidiaCarbideMachineList{}
+				machineList := &infrastructurev1beta1.NcxInfraMachineList{}
 				err := k8sClient.List(ctx, machineList, client.InNamespace(testNamespace),
 					client.MatchingLabels{clusterv1.ClusterNameLabel: clusterName})
 				if err != nil {
@@ -338,7 +338,7 @@ var _ = Describe("NVIDIA Carbide Cluster Lifecycle E2E", func() {
 
 			By("Waiting for all machines to be ready")
 			Eventually(func() int {
-				machineList := &infrastructurev1beta1.NvidiaCarbideMachineList{}
+				machineList := &infrastructurev1beta1.NcxInfraMachineList{}
 				err := k8sClient.List(ctx, machineList, client.InNamespace(testNamespace),
 					client.MatchingLabels{clusterv1.ClusterNameLabel: clusterName})
 				if err != nil {
@@ -359,7 +359,7 @@ var _ = Describe("NVIDIA Carbide Cluster Lifecycle E2E", func() {
 
 			By("Waiting for all machines to be deleted")
 			Eventually(func() int {
-				machineList := &infrastructurev1beta1.NvidiaCarbideMachineList{}
+				machineList := &infrastructurev1beta1.NcxInfraMachineList{}
 				err := k8sClient.List(ctx, machineList, client.InNamespace(testNamespace),
 					client.MatchingLabels{clusterv1.ClusterNameLabel: clusterName})
 				if err != nil {
@@ -368,7 +368,7 @@ var _ = Describe("NVIDIA Carbide Cluster Lifecycle E2E", func() {
 				return len(machineList.Items)
 			}, clusterDeletionTimeout, pollInterval).Should(Equal(0))
 
-			By("Waiting for NvidiaCarbideCluster to be deleted")
+			By("Waiting for NcxInfraCluster to be deleted")
 			Eventually(func() bool {
 				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(nvidiaCarbideCluster), nvidiaCarbideCluster)
 				return err != nil

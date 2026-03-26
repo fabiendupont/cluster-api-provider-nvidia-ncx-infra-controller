@@ -4,22 +4,22 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
-  name: nvidiacarbidemachinetemplates.infrastructure.cluster.x-k8s.io
+  name: ncxinframachinetemplates.infrastructure.cluster.x-k8s.io
 spec:
   group: infrastructure.cluster.x-k8s.io
   names:
     categories:
     - cluster-api
-    kind: NvidiaCarbideMachineTemplate
-    listKind: NvidiaCarbideMachineTemplateList
-    plural: nvidiacarbidemachinetemplates
-    singular: nvidiacarbidemachinetemplate
+    kind: NcxInfraMachineTemplate
+    listKind: NcxInfraMachineTemplateList
+    plural: ncxinframachinetemplates
+    singular: ncxinframachinetemplate
   scope: Namespaced
   versions:
   - name: v1beta1
     schema:
       openAPIV3Schema:
-        description: NvidiaCarbideMachineTemplate is the Schema for the nvidiacarbidemachinetemplates
+        description: NcxInfraMachineTemplate is the Schema for the ncxinframachinetemplates
           API
         properties:
           apiVersion:
@@ -40,10 +40,10 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of NvidiaCarbideMachineTemplate
+            description: spec defines the desired state of NcxInfraMachineTemplate
             properties:
               template:
-                description: Template contains the NvidiaCarbideMachine template specification
+                description: Template contains the NcxInfraMachine template specification
                 properties:
                   metadata:
                     description: Standard object's metadata
@@ -117,7 +117,7 @@ spec:
                       providerID:
                         description: |-
                           ProviderID is the unique identifier for the machine instance
-                          Format: nvidia-carbide://org/tenant/site/instance-id
+                          Format: ncx-infra://org/tenant/site/instance-id
                         type: string
                       sshKeyGroups:
                         description: SSHKeyGroups contains SSH key group IDs for accessing

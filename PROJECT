@@ -6,8 +6,8 @@ cliVersion: 4.10.1
 domain: cluster.x-k8s.io
 layout:
 - go.kubebuilder.io/v4
-projectName: cluster-api-provider-nvidia-carbide
-repo: github.com/NVIDIA/cluster-api-provider-nvidia-carbide
+projectName: cluster-api-provider-nvidia-ncx-infra-controller
+repo: github.com/NVIDIA/cluster-api-provider-nvidia-ncx-infra-controller
 resources:
 - api:
     crdVersion: v1
@@ -15,8 +15,8 @@ resources:
   controller: true
   domain: cluster.x-k8s.io
   group: infrastructure
-  kind: NvidiaCarbideCluster
-  path: github.com/NVIDIA/cluster-api-provider-nvidia-carbide/api/v1beta1
+  kind: NcxInfraCluster
+  path: github.com/NVIDIA/cluster-api-provider-nvidia-ncx-infra-controller/api/v1beta1
   version: v1beta1
 - api:
     crdVersion: v1
@@ -24,15 +24,15 @@ resources:
   controller: true
   domain: cluster.x-k8s.io
   group: infrastructure
-  kind: NvidiaCarbideMachine
-  path: github.com/NVIDIA/cluster-api-provider-nvidia-carbide/api/v1beta1
+  kind: NcxInfraMachine
+  path: github.com/NVIDIA/cluster-api-provider-nvidia-ncx-infra-controller/api/v1beta1
   version: v1beta1
 - api:
     crdVersion: v1
     namespaced: true
   domain: cluster.x-k8s.io
   group: infrastructure
-  kind: NvidiaCarbideMachineTemplate
-  path: github.com/NVIDIA/cluster-api-provider-nvidia-carbide/api/v1beta1
+  kind: NcxInfraMachineTemplate
+  path: github.com/NVIDIA/cluster-api-provider-nvidia-ncx-infra-controller/api/v1beta1
   version: v1beta1
 version: "3"

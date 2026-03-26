@@ -24,7 +24,7 @@ import (
 var (
 	InstanceProvisioningDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "capi_nvidia_carbide_instance_provisioning_seconds",
+			Name:    "capi_ncx_infra_instance_provisioning_seconds",
 			Help:    "Time from instance creation to Ready state",
 			Buckets: []float64{30, 60, 120, 300, 600},
 		},
@@ -32,14 +32,14 @@ var (
 	)
 	VPCCount = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "capi_nvidia_carbide_vpcs_total",
+			Name: "capi_ncx_infra_vpcs_total",
 			Help: "Number of managed VPCs",
 		},
 		[]string{"site"},
 	)
 	APIErrors = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "capi_nvidia_carbide_api_errors_total",
+			Name: "capi_ncx_infra_api_errors_total",
 			Help: "Carbide API errors by status code",
 		},
 		[]string{"method", "status_code"},

@@ -4,20 +4,20 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
-  name: nvidiacarbidemachineproviderspecs.
+  name: ncxinframachineproviderspecs.
 spec:
   group: ""
   names:
-    kind: NvidiaCarbideMachineProviderSpec
-    listKind: NvidiaCarbideMachineProviderSpecList
-    plural: nvidiacarbidemachineproviderspecs
-    singular: nvidiacarbidemachineproviderspec
+    kind: NcxInfraMachineProviderSpec
+    listKind: NcxInfraMachineProviderSpecList
+    plural: ncxinframachineproviderspecs
+    singular: ncxinframachineproviderspec
   scope: Namespaced
   versions:
   - name: ""
     schema:
       openAPIV3Schema:
-        description: NvidiaCarbideMachineProviderSpec defines the desired state for OpenShift
+        description: NcxInfraMachineProviderSpec defines the desired state for OpenShift
           Machine API
         properties:
           additionalSubnetIds:

@@ -1,6 +1,6 @@
 # Image URL to use all building/pushing image targets
 VERSION ?= 0.1.0
-IMAGE_TAG_BASE ?= ghcr.io/fabiendupont/cluster-api-provider-nvidia-carbide
+IMAGE_TAG_BASE ?= ghcr.io/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller
 IMG ?= $(IMAGE_TAG_BASE):latest
 BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
 CATALOG_IMG ?= $(IMAGE_TAG_BASE)-catalog:v$(VERSION)
@@ -79,7 +79,7 @@ test-coverage: manifests generate fmt vet setup-envtest ## Run tests with covera
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
 # CertManager is installed by default; skip with:
 # - CERT_MANAGER_INSTALL_SKIP=true
-KIND_CLUSTER ?= cluster-api-provider-nvidia-carbide-test-e2e
+KIND_CLUSTER ?= cluster-api-provider-nvidia-ncx-infra-controller-test-e2e
 
 .PHONY: setup-test-e2e
 setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
@@ -105,9 +105,9 @@ cleanup-test-e2e: ## Tear down the Kind cluster used for e2e tests
 	@$(KIND) delete cluster --name $(KIND_CLUSTER)
 
 .PHONY: test-e2e-live
-test-e2e-live: manifests generate ## Run e2e tests against live Carbide API.
-	kind get kubeconfig --name carbide-rest-local > /tmp/carbide-e2e-kubeconfig
-	KUBECONFIG=/tmp/carbide-e2e-kubeconfig \
+test-e2e-live: manifests generate ## Run e2e tests against live NCX Infra Controller API.
+	kind get kubeconfig --name carbide-rest-local > /tmp/ncx-e2e-kubeconfig
+	KUBECONFIG=/tmp/ncx-e2e-kubeconfig \
 		go test -tags=e2e ./test/e2e-live/ -v -ginkgo.v
 
 .PHONY: lint
@@ -154,10 +154,10 @@ PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
 docker-buildx: ## Build and push docker image for the manager for cross-platform support
 	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
 	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
-	- $(CONTAINER_TOOL) buildx create --name cluster-api-provider-nvidia-carbide-builder
-	$(CONTAINER_TOOL) buildx use cluster-api-provider-nvidia-carbide-builder
+	- $(CONTAINER_TOOL) buildx create --name cluster-api-provider-nvidia-ncx-infra-controller-builder
+	$(CONTAINER_TOOL) buildx use cluster-api-provider-nvidia-ncx-infra-controller-builder
 	- $(CONTAINER_TOOL) buildx build --push --platform=$(PLATFORMS) --tag ${IMG} -f Dockerfile.cross .
-	- $(CONTAINER_TOOL) buildx rm cluster-api-provider-nvidia-carbide-builder
+	- $(CONTAINER_TOOL) buildx rm cluster-api-provider-nvidia-ncx-infra-controller-builder
 	rm Dockerfile.cross
 
 .PHONY: build-installer

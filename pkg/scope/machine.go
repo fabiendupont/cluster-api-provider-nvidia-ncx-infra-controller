@@ -25,8 +25,8 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	infrastructurev1 "github.com/fabiendupont/cluster-api-provider-nvidia-carbide/api/v1beta1"
-	"github.com/fabiendupont/cluster-api-provider-nvidia-carbide/pkg/providerid"
+	infrastructurev1 "github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/api/v1beta1"
+	"github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/pkg/providerid"
 )
 
 // MachineScopeParams defines parameters for creating a machine scope
@@ -34,9 +34,9 @@ type MachineScopeParams struct {
 	Client               client.Client
 	Cluster              *clusterv1.Cluster
 	Machine              *clusterv1.Machine
-	NvidiaCarbideCluster *infrastructurev1.NvidiaCarbideCluster
-	NvidiaCarbideMachine *infrastructurev1.NvidiaCarbideMachine
-	NvidiaCarbideClient  NvidiaCarbideClientInterface
+	NcxInfraCluster *infrastructurev1.NcxInfraCluster
+	NcxInfraMachine *infrastructurev1.NcxInfraMachine
+	NcxInfraClient  NcxInfraClientInterface
 	OrgName              string // Organization name for API calls
 }
 
@@ -46,9 +46,9 @@ type MachineScope struct {
 
 	Cluster              *clusterv1.Cluster
 	Machine              *clusterv1.Machine
-	NvidiaCarbideCluster *infrastructurev1.NvidiaCarbideCluster
-	NvidiaCarbideMachine *infrastructurev1.NvidiaCarbideMachine
-	NvidiaCarbideClient  NvidiaCarbideClientInterface
+	NcxInfraCluster *infrastructurev1.NcxInfraCluster
+	NcxInfraMachine *infrastructurev1.NcxInfraMachine
+	NcxInfraClient  NcxInfraClientInterface
 	OrgName              string // Organization name for API calls
 }
 
@@ -63,14 +63,14 @@ func NewMachineScope(params MachineScopeParams) (*MachineScope, error) {
 	if params.Machine == nil {
 		return nil, fmt.Errorf("machine is required")
 	}
-	if params.NvidiaCarbideCluster == nil {
-		return nil, fmt.Errorf("nvidia carbide cluster is required")
+	if params.NcxInfraCluster == nil {
+		return nil, fmt.Errorf("ncx infra cluster is required")
 	}
-	if params.NvidiaCarbideMachine == nil {
-		return nil, fmt.Errorf("nvidia carbide machine is required")
+	if params.NcxInfraMachine == nil {
+		return nil, fmt.Errorf("ncx infra machine is required")
 	}
-	if params.NvidiaCarbideClient == nil {
-		return nil, fmt.Errorf("nvidia carbide client is required")
+	if params.NcxInfraClient == nil {
+		return nil, fmt.Errorf("ncx infra client is required")
 	}
 	if params.OrgName == "" {
 		return nil, fmt.Errorf("org name is required")
@@ -80,9 +80,9 @@ func NewMachineScope(params MachineScopeParams) (*MachineScope, error) {
 		Client:               params.Client,
 		Cluster:              params.Cluster,
 		Machine:              params.Machine,
-		NvidiaCarbideCluster: params.NvidiaCarbideCluster,
-		NvidiaCarbideMachine: params.NvidiaCarbideMachine,
-		NvidiaCarbideClient:  params.NvidiaCarbideClient,
+		NcxInfraCluster: params.NcxInfraCluster,
+		NcxInfraMachine: params.NcxInfraMachine,
+		NcxInfraClient:  params.NcxInfraClient,
 		OrgName:              params.OrgName,
 	}, nil
 }
@@ -113,19 +113,19 @@ func (s *MachineScope) Role() string {
 // ProviderID returns the provider ID, checking status first then falling back to spec
 func (s *MachineScope) ProviderID() *providerid.ProviderID {
 	// Check status first (set by provider after creation)
-	if s.NvidiaCarbideMachine.Status.ProviderID != nil && *s.NvidiaCarbideMachine.Status.ProviderID != "" {
-		pid, err := providerid.ParseProviderID(*s.NvidiaCarbideMachine.Status.ProviderID)
+	if s.NcxInfraMachine.Status.ProviderID != nil && *s.NcxInfraMachine.Status.ProviderID != "" {
+		pid, err := providerid.ParseProviderID(*s.NcxInfraMachine.Status.ProviderID)
 		if err == nil {
 			return pid
 		}
 	}
 
 	// Fall back to spec (for pre-existing machines)
-	if s.NvidiaCarbideMachine.Spec.ProviderID == nil || *s.NvidiaCarbideMachine.Spec.ProviderID == "" {
+	if s.NcxInfraMachine.Spec.ProviderID == nil || *s.NcxInfraMachine.Spec.ProviderID == "" {
 		return nil
 	}
 
-	pid, err := providerid.ParseProviderID(*s.NvidiaCarbideMachine.Spec.ProviderID)
+	pid, err := providerid.ParseProviderID(*s.NcxInfraMachine.Spec.ProviderID)
 	if err != nil {
 		return nil
 	}
@@ -134,7 +134,7 @@ func (s *MachineScope) ProviderID() *providerid.ProviderID {
 }
 
 // SetProviderID sets the provider ID in both status and spec
-// Format: nvidia-carbide://<org>/<tenant>/<site>/<instance-id>
+// Format: ncx-infra://<org>/<tenant>/<site>/<instance-id>
 func (s *MachineScope) SetProviderID(tenantName, siteName, instanceIDStr string) error {
 	instanceUUID, err := uuid.Parse(instanceIDStr)
 	if err != nil {
@@ -143,55 +143,55 @@ func (s *MachineScope) SetProviderID(tenantName, siteName, instanceIDStr string)
 
 	pid := providerid.NewProviderID(s.OrgName, tenantName, siteName, instanceUUID)
 	providerIDStr := pid.String()
-	s.NvidiaCarbideMachine.Status.ProviderID = &providerIDStr
-	s.NvidiaCarbideMachine.Spec.ProviderID = &providerIDStr
+	s.NcxInfraMachine.Status.ProviderID = &providerIDStr
+	s.NcxInfraMachine.Spec.ProviderID = &providerIDStr
 	s.Machine.Spec.ProviderID = providerIDStr
 	return nil
 }
 
 // InstanceID returns the instance ID from status
 func (s *MachineScope) InstanceID() string {
-	return s.NvidiaCarbideMachine.Status.InstanceID
+	return s.NcxInfraMachine.Status.InstanceID
 }
 
 // SetInstanceID sets the instance ID in status
 func (s *MachineScope) SetInstanceID(instanceID string) {
-	s.NvidiaCarbideMachine.Status.InstanceID = instanceID
+	s.NcxInfraMachine.Status.InstanceID = instanceID
 }
 
 // MachineID returns the physical machine ID from status
 func (s *MachineScope) MachineID() string {
-	return s.NvidiaCarbideMachine.Status.MachineID
+	return s.NcxInfraMachine.Status.MachineID
 }
 
 // SetMachineID sets the physical machine ID in status
 func (s *MachineScope) SetMachineID(machineID string) {
-	s.NvidiaCarbideMachine.Status.MachineID = machineID
+	s.NcxInfraMachine.Status.MachineID = machineID
 }
 
 // InstanceState returns the instance state from status
 func (s *MachineScope) InstanceState() string {
-	return s.NvidiaCarbideMachine.Status.InstanceState
+	return s.NcxInfraMachine.Status.InstanceState
 }
 
 // SetInstanceState sets the instance state in status
 func (s *MachineScope) SetInstanceState(state string) {
-	s.NvidiaCarbideMachine.Status.InstanceState = state
+	s.NcxInfraMachine.Status.InstanceState = state
 }
 
 // SetReady sets the ready status
 func (s *MachineScope) SetReady(ready bool) {
-	s.NvidiaCarbideMachine.Status.Ready = ready
+	s.NcxInfraMachine.Status.Ready = ready
 }
 
 // IsReady returns whether the machine is ready
 func (s *MachineScope) IsReady() bool {
-	return s.NvidiaCarbideMachine.Status.Ready
+	return s.NcxInfraMachine.Status.Ready
 }
 
 // SetAddresses sets the machine addresses
 func (s *MachineScope) SetAddresses(addresses []clusterv1.MachineAddress) {
-	s.NvidiaCarbideMachine.Status.Addresses = addresses
+	s.NcxInfraMachine.Status.Addresses = addresses
 	s.Machine.Status.Addresses = addresses
 }
 
@@ -221,10 +221,10 @@ func (s *MachineScope) GetBootstrapData(ctx context.Context) (string, error) {
 
 // GetSubnetID returns the subnet ID for the machine's network
 func (s *MachineScope) GetSubnetID() (string, error) {
-	subnetName := s.NvidiaCarbideMachine.Spec.Network.SubnetName
+	subnetName := s.NcxInfraMachine.Spec.Network.SubnetName
 
 	// Look up subnet ID from cluster status
-	subnetIDs := s.NvidiaCarbideCluster.Status.NetworkStatus.SubnetIDs
+	subnetIDs := s.NcxInfraCluster.Status.NetworkStatus.SubnetIDs
 	subnetID, ok := subnetIDs[subnetName]
 	if !ok {
 		return "", fmt.Errorf("subnet %s not found in cluster status", subnetName)
@@ -235,9 +235,9 @@ func (s *MachineScope) GetSubnetID() (string, error) {
 
 // GetVPCPrefixID returns the VPC Prefix ID for the machine's network
 func (s *MachineScope) GetVPCPrefixID() (string, error) {
-	prefixName := s.NvidiaCarbideMachine.Spec.Network.VPCPrefixName
+	prefixName := s.NcxInfraMachine.Spec.Network.VPCPrefixName
 
-	vpcPrefixIDs := s.NvidiaCarbideCluster.Status.NetworkStatus.VPCPrefixIDs
+	vpcPrefixIDs := s.NcxInfraCluster.Status.NetworkStatus.VPCPrefixIDs
 	prefixID, ok := vpcPrefixIDs[prefixName]
 	if !ok {
 		return "", fmt.Errorf("VPC prefix %s not found in cluster status", prefixName)
@@ -248,19 +248,19 @@ func (s *MachineScope) GetVPCPrefixID() (string, error) {
 
 // VPCID returns the VPC ID from the cluster
 func (s *MachineScope) VPCID() string {
-	return s.NvidiaCarbideCluster.Status.VPCID
+	return s.NcxInfraCluster.Status.VPCID
 }
 
 // TenantID returns the tenant ID from the cluster
 func (s *MachineScope) TenantID() string {
-	return s.NvidiaCarbideCluster.Spec.TenantID
+	return s.NcxInfraCluster.Spec.TenantID
 }
 
 // PatchObject persists the machine status
 func (s *MachineScope) PatchObject(ctx context.Context) error {
-	// Update NvidiaCarbideMachine status
-	if err := s.Client.Status().Update(ctx, s.NvidiaCarbideMachine); err != nil {
-		return fmt.Errorf("failed to update nvidia carbide machine status: %w", err)
+	// Update NcxInfraMachine status
+	if err := s.Client.Status().Update(ctx, s.NcxInfraMachine); err != nil {
+		return fmt.Errorf("failed to update ncx infra machine status: %w", err)
 	}
 
 	// Update Machine status

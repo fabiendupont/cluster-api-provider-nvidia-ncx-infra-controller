@@ -14,7 +14,7 @@ spec:
         - 10.96.0.0/12
   infrastructureRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-    kind: NvidiaCarbideCluster
+    kind: NcxInfraCluster
     name: ${CLUSTER_NAME}
   controlPlaneRef:
     apiVersion: controlplane.cluster.x-k8s.io/v1beta1
@@ -23,15 +23,15 @@ spec:
 
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-kind: NvidiaCarbideCluster
+kind: NcxInfraCluster
 metadata:
   name: ${CLUSTER_NAME}
   namespace: ${NAMESPACE:=default}
 spec:
   siteRef:
-    name: ${NVIDIA_CARBIDE_SITE_NAME}
+    name: ${NCX_INFRA_SITE_NAME}
 
-  tenantID: ${NVIDIA_CARBIDE_TENANT_ID}
+  tenantID: ${NCX_INFRA_TENANT_ID}
 
   vpc:
     name: ${CLUSTER_NAME}-vpc
@@ -62,19 +62,19 @@ spec:
 
   subnets:
     - name: "control-plane"
-      cidr: ${NVIDIA_CARBIDE_CONTROL_PLANE_SUBNET_CIDR:=10.100.1.0/24}
+      cidr: ${NCX_INFRA_CONTROL_PLANE_SUBNET_CIDR:=10.100.1.0/24}
       role: "control-plane"
       labels:
         subnet-type: "control-plane"
     - name: "worker"
-      cidr: ${NVIDIA_CARBIDE_WORKER_SUBNET_CIDR:=10.100.2.0/24}
+      cidr: ${NCX_INFRA_WORKER_SUBNET_CIDR:=10.100.2.0/24}
       role: "worker"
       labels:
         subnet-type: "worker"
 
   authentication:
     secretRef:
-      name: ${NVIDIA_CARBIDE_CREDENTIALS_SECRET_NAME:=nvidia-carbide-credentials}
+      name: ${NCX_INFRA_CREDENTIALS_SECRET_NAME:=ncx-infra-credentials}
       namespace: ${NAMESPACE:=default}
 
 ---
@@ -90,7 +90,7 @@ spec:
   machineTemplate:
     infrastructureRef:
       apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-      kind: NvidiaCarbideMachineTemplate
+      kind: NcxInfraMachineTemplate
       name: ${CLUSTER_NAME}-control-plane
 
   kubeadmConfigSpec:
@@ -114,7 +114,7 @@ spec:
 
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-kind: NvidiaCarbideMachineTemplate
+kind: NcxInfraMachineTemplate
 metadata:
   name: ${CLUSTER_NAME}-control-plane
   namespace: ${NAMESPACE:=default}
@@ -122,13 +122,13 @@ spec:
   template:
     spec:
       instanceType:
-        id: ${NVIDIA_CARBIDE_CONTROL_PLANE_INSTANCE_TYPE_ID}
+        id: ${NCX_INFRA_CONTROL_PLANE_INSTANCE_TYPE_ID}
 
       network:
         subnetName: "control-plane"
 
       sshKeyGroups:
-        - ${NVIDIA_CARBIDE_SSH_KEY_GROUP_ID}
+        - ${NCX_INFRA_SSH_KEY_GROUP_ID}
 
       labels:
         role: "control-plane"
@@ -166,12 +166,12 @@ spec:
 
       infrastructureRef:
         apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-        kind: NvidiaCarbideMachineTemplate
+        kind: NcxInfraMachineTemplate
         name: ${CLUSTER_NAME}-worker
 
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-kind: NvidiaCarbideMachineTemplate
+kind: NcxInfraMachineTemplate
 metadata:
   name: ${CLUSTER_NAME}-worker
   namespace: ${NAMESPACE:=default}
@@ -179,13 +179,13 @@ spec:
   template:
     spec:
       instanceType:
-        id: ${NVIDIA_CARBIDE_WORKER_INSTANCE_TYPE_ID}
+        id: ${NCX_INFRA_WORKER_INSTANCE_TYPE_ID}
 
       network:
         subnetName: "worker"
 
       sshKeyGroups:
-        - ${NVIDIA_CARBIDE_SSH_KEY_GROUP_ID}
+        - ${NCX_INFRA_SSH_KEY_GROUP_ID}
 
       labels:
         role: "worker"

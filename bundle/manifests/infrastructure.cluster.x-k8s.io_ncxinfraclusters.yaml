@@ -4,20 +4,20 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
-  name: nvidiacarbideclusters.infrastructure.cluster.x-k8s.io
+  name: ncxinfraclusters.infrastructure.cluster.x-k8s.io
 spec:
   group: infrastructure.cluster.x-k8s.io
   names:
-    kind: NvidiaCarbideCluster
-    listKind: NvidiaCarbideClusterList
-    plural: nvidiacarbideclusters
-    singular: nvidiacarbidecluster
+    kind: NcxInfraCluster
+    listKind: NcxInfraClusterList
+    plural: ncxinfraclusters
+    singular: ncxinfracluster
   scope: Namespaced
   versions:
   - name: v1beta1
     schema:
       openAPIV3Schema:
-        description: NvidiaCarbideCluster is the Schema for the nvidiacarbideclusters
+        description: NcxInfraCluster is the Schema for the ncxinfraclusters
           API
         properties:
           apiVersion:
@@ -38,7 +38,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of NvidiaCarbideCluster
+            description: spec defines the desired state of NcxInfraCluster
             properties:
               authentication:
                 description: Authentication contains credentials for accessing the
@@ -203,10 +203,10 @@ spec:
             - vpc
             type: object
           status:
-            description: status defines the observed state of NvidiaCarbideCluster
+            description: status defines the observed state of NcxInfraCluster
             properties:
               conditions:
-                description: Conditions represent the current state of the NvidiaCarbideCluster
+                description: Conditions represent the current state of the NcxInfraCluster
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

@@ -1,14 +1,14 @@
 # Architecture Documentation
 
-This document provides an in-depth explanation of the Cluster API Provider for NVIDIA Carbide architecture, design decisions, and implementation details.
+This document provides an in-depth explanation of the Cluster API Provider for NVIDIA NCX Infra Controller architecture, design decisions, and implementation details.
 
 ## Overview
 
-The NVIDIA Carbide CAPI Provider implements a three-layer architecture:
+The NVIDIA NCX Infra Controller CAPI Provider implements a three-layer architecture:
 
 1. **Cluster API Layer** - Standard Kubernetes cluster lifecycle management
 2. **OpenShift Integration Layer** - OpenShift-specific machine management
-3. **NVIDIA Carbide Platform Layer** - Bare-metal infrastructure provisioning
+3. **NVIDIA NCX Infra Controller Platform Layer** - Bare-metal infrastructure provisioning
 
 ## Component Architecture
 
@@ -25,10 +25,10 @@ The NVIDIA Carbide CAPI Provider implements a three-layer architecture:
 │  └─────────────────────────────────────────────────────────────┘   │
 │                              ↓                                        │
 │  ┌─────────────────────────────────────────────────────────────┐   │
-│  │         NVIDIA Carbide Infrastructure Provider                      │   │
+│  │         NVIDIA NCX Infra Controller Infrastructure Provider                      │   │
 │  │                                                              │   │
 │  │  ┌────────────────────┐  ┌──────────────────────┐         │   │
-│  │  │ NvidiaCarbideCluster     │  │ NvidiaCarbideMachine       │         │   │
+│  │  │ NcxInfraCluster     │  │ NcxInfraMachine       │         │   │
 │  │  │ Controller         │  │ Controller           │         │   │
 │  │  │                    │  │                      │         │   │
 │  │  │ • VPC Management   │  │ • Instance Provision │         │   │
@@ -39,12 +39,12 @@ The NVIDIA Carbide CAPI Provider implements a three-layer architecture:
 │  │  ┌──────────────────────────────────────────────┐         │   │
 │  │  │        Cluster/Machine Scopes                 │         │   │
 │  │  │  • Credential Management                      │         │   │
-│  │  │  • NVIDIA Carbide Client Creation                    │         │   │
+│  │  │  • NVIDIA NCX Infra Controller Client Creation                    │         │   │
 │  │  │  • Status Helpers                             │         │   │
 │  │  └──────────────────────────────────────────────┘         │   │
 │  │                                                              │   │
 │  │  ┌──────────────────────────────────────────────┐         │   │
-│  │  │        NVIDIA Carbide API Client                     │         │   │
+│  │  │        NVIDIA NCX Infra Controller API Client                     │         │   │
 │  │  │  • JWT Authentication                         │         │   │
 │  │  │  • VPC Operations                             │         │   │
 │  │  │  • Instance Lifecycle                         │         │   │
@@ -55,7 +55,7 @@ The NVIDIA Carbide CAPI Provider implements a three-layer architecture:
 └─────────────────────────────────────────────────────────────────────┘
                                ↓
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    NVIDIA Carbide Platform                                  │
+│                    NVIDIA NCX Infra Controller Platform                                  │
 │  ┌───────────────────┐  ┌───────────────────┐  ┌─────────────────┐ │
 │  │   VPC Manager     │  │  Instance Manager │  │  Site Manager   │ │
 │  │  • Network Setup  │  │  • Allocation     │  │  • Site CRDs    │ │
@@ -87,13 +87,13 @@ The NVIDIA Carbide CAPI Provider implements a three-layer architecture:
    kind: Cluster
    ```
 
-2. **CAPI Core creates NvidiaCarbideCluster**
+2. **CAPI Core creates NcxInfraCluster**
    - Sets owner reference
    - Waits for infrastructure ready
 
-3. **NvidiaCarbideCluster Controller reconciles**
+3. **NcxInfraCluster Controller reconciles**
    - Fetches credentials from Secret
-   - Creates NVIDIA Carbide API client
+   - Creates NVIDIA NCX Infra Controller API client
    - Provisions VPC → Subnets → NSG
    - Updates status with resource IDs
    - Sets Ready condition
@@ -106,10 +106,10 @@ The NVIDIA Carbide CAPI Provider implements a three-layer architecture:
    - Kubeadm init/join configuration
    - Stores in Secret
 
-6. **NvidiaCarbideMachine Controller reconciles**
-   - Waits for NvidiaCarbideCluster ready
+6. **NcxInfraMachine Controller reconciles**
+   - Waits for NcxInfraCluster ready
    - Waits for bootstrap data
-   - Creates NVIDIA Carbide Instance with user data
+   - Creates NVIDIA NCX Infra Controller Instance with user data
    - Polls instance status
    - Updates Machine addresses
    - Sets provider ID
@@ -133,13 +133,13 @@ The NVIDIA Carbide CAPI Provider implements a three-layer architecture:
 ```
 Machine Created
     ↓
-NvidiaCarbideMachine Created (owner ref)
+NcxInfraMachine Created (owner ref)
     ↓
-Wait for NvidiaCarbideCluster Ready
+Wait for NcxInfraCluster Ready
     ↓
 Wait for Bootstrap Data Secret
     ↓
-Create NVIDIA Carbide Instance
+Create NVIDIA NCX Infra Controller Instance
     ↓
 Poll Instance Status (30s interval)
     ↓
@@ -154,7 +154,7 @@ Machine Ready
 
 ## Controllers
 
-### NvidiaCarbideCluster Controller
+### NcxInfraCluster Controller
 
 **Purpose:** Manages cluster-level infrastructure (VPC, subnets, NSG)
 
@@ -162,11 +162,11 @@ Machine Ready
 
 ```go
 func Reconcile(ctx, req) {
-    1. Fetch NvidiaCarbideCluster
+    1. Fetch NcxInfraCluster
     2. Fetch owner Cluster
     3. Check if paused
     4. Add finalizer
-    5. Create cluster scope (with NVIDIA Carbide client)
+    5. Create cluster scope (with NVIDIA NCX Infra Controller client)
 
     if deletion:
         Delete NSG → Subnets → VPC
@@ -198,7 +198,7 @@ func Reconcile(ctx, req) {
 - `NSGReady` - Network security group configured
 - `Ready` - All infrastructure ready
 
-### NvidiaCarbideMachine Controller
+### NcxInfraMachine Controller
 
 **Purpose:** Manages individual machine instances
 
@@ -206,12 +206,12 @@ func Reconcile(ctx, req) {
 
 ```go
 func Reconcile(ctx, req) {
-    1. Fetch NvidiaCarbideMachine
+    1. Fetch NcxInfraMachine
     2. Fetch owner Machine
     3. Fetch owner Cluster
-    4. Fetch NvidiaCarbideCluster
+    4. Fetch NcxInfraCluster
     5. Check if paused
-    6. Wait for NvidiaCarbideCluster ready
+    6. Wait for NcxInfraCluster ready
     7. Wait for bootstrap data
     8. Add finalizer
     9. Create machine scope
@@ -236,7 +236,7 @@ func Reconcile(ctx, req) {
             - Get subnet ID
             - Build network interfaces
             - Set instance type or machine ID
-            - Call NVIDIA Carbide API
+            - Call NVIDIA NCX Infra Controller API
             - Store instance ID
             - Set provider ID
         Requeue after 10s
@@ -244,7 +244,7 @@ func Reconcile(ctx, req) {
 ```
 
 **Status Conditions:**
-- `InstanceProvisioned` - Instance created in NVIDIA Carbide
+- `InstanceProvisioned` - Instance created in NVIDIA NCX Infra Controller
 - `NetworkConfigured` - Network interfaces configured
 - `Ready` - Instance running and accessible
 
@@ -255,7 +255,7 @@ func Reconcile(ctx, req) {
 **Purpose:** Provides context and utilities for cluster reconciliation
 
 **Responsibilities:**
-- Manages NVIDIA Carbide API client lifecycle
+- Manages NVIDIA NCX Infra Controller API client lifecycle
 - Provides accessor methods for cluster resources
 - Handles credential management
 - Status update helpers
@@ -284,7 +284,7 @@ func Reconcile(ctx, req) {
 - IsControlPlane() - Checks if machine is control plane
 ```
 
-## NVIDIA Carbide API Client
+## NVIDIA NCX Infra Controller API Client
 
 ### Architecture
 
@@ -340,11 +340,11 @@ DELETE /v2/org/{org}/carbide/nsg/{id}      - Delete NSG
 The provider ID uniquely identifies instances:
 
 ```
-nvidia-carbide://site-uuid/instance-uuid
+nvidia-ncx-infra-controller://site-uuid/instance-uuid
 ```
 
 **Purpose:**
-- Correlates Kubernetes Nodes with NVIDIA Carbide Instances
+- Correlates Kubernetes Nodes with NVIDIA NCX Infra Controller Instances
 - Used by Cloud Controller Manager for node lifecycle
 - Enables node-instance mapping for operations
 
@@ -459,8 +459,8 @@ return ctrl.Result{}, err  // Exponential backoff
 Used for cleanup on deletion:
 
 ```go
-const NvidiaCarbideClusterFinalizer = "nvidiacarbidecluster.infrastructure.cluster.x-k8s.io"
-const NvidiaCarbideMachineFinalizer = "nvidiacarbidemachine.infrastructure.cluster.x-k8s.io"
+const NcxInfraClusterFinalizer = "ncxinfracluster.infrastructure.cluster.x-k8s.io"
+const NcxInfraMachineFinalizer = "ncxinframachine.infrastructure.cluster.x-k8s.io"
 ```
 
 **Cleanup order:**

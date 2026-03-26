@@ -33,7 +33,7 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	infrastructurev1beta1 "github.com/fabiendupont/cluster-api-provider-nvidia-carbide/api/v1beta1"
+	infrastructurev1beta1 "github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
@@ -45,7 +45,7 @@ const (
 
 func TestE2ELive(t *testing.T) {
 	RegisterFailHandler(Fail)
-	_, _ = fmt.Fprintf(GinkgoWriter, "Starting cluster-api-provider-nvidia-carbide live e2e test suite\n")
+	_, _ = fmt.Fprintf(GinkgoWriter, "Starting cluster-api-provider-nvidia-ncx-infra-controller live e2e test suite\n")
 	RunSpecs(t, "Live E2E Suite")
 }
 
@@ -109,17 +109,17 @@ var _ = Describe("Live NVIDIA Carbide Cluster E2E", Label("live"), func() {
 					},
 					InfrastructureRef: clusterv1.ContractVersionedObjectReference{
 						APIGroup: "infrastructure.cluster.x-k8s.io",
-						Kind:     "NvidiaCarbideCluster",
+						Kind:     "NcxInfraCluster",
 						Name:     clusterName,
 					},
 				},
 			}
 			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 
-			By("Creating NvidiaCarbideCluster with owner reference to Cluster")
+			By("Creating NcxInfraCluster with owner reference to Cluster")
 			// The CAPI controller normally sets the OwnerRef, but since we're not
 			// running the CAPI controller, we set it manually.
-			nvidiaCarbideCluster := &infrastructurev1beta1.NvidiaCarbideCluster{
+			nvidiaCarbideCluster := &infrastructurev1beta1.NcxInfraCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      clusterName,
 					Namespace: testNamespace,
@@ -132,7 +132,7 @@ var _ = Describe("Live NVIDIA Carbide Cluster E2E", Label("live"), func() {
 						},
 					},
 				},
-				Spec: infrastructurev1beta1.NvidiaCarbideClusterSpec{
+				Spec: infrastructurev1beta1.NcxInfraClusterSpec{
 					SiteRef: infrastructurev1beta1.SiteReference{
 						ID: siteID,
 					},
@@ -167,7 +167,7 @@ var _ = Describe("Live NVIDIA Carbide Cluster E2E", Label("live"), func() {
 			}
 			Expect(k8sClient.Create(ctx, nvidiaCarbideCluster)).To(Succeed())
 
-			By("Waiting for NvidiaCarbideCluster to be ready")
+			By("Waiting for NcxInfraCluster to be ready")
 			waitForClusterReady(ctx, k8sClient, nvidiaCarbideCluster)
 
 			By("Verifying VPC was created")
@@ -197,7 +197,7 @@ var _ = Describe("Live NVIDIA Carbide Cluster E2E", Label("live"), func() {
 					},
 					InfrastructureRef: clusterv1.ContractVersionedObjectReference{
 						APIGroup: "infrastructure.cluster.x-k8s.io",
-						Kind:     "NvidiaCarbideMachine",
+						Kind:     "NcxInfraMachine",
 						Name:     machineName,
 					},
 				},
@@ -215,7 +215,7 @@ var _ = Describe("Live NVIDIA Carbide Cluster E2E", Label("live"), func() {
 			}
 			Expect(k8sClient.Create(ctx, bootstrapSecret)).To(Succeed())
 
-			nvidiaCarbideMachine := &infrastructurev1beta1.NvidiaCarbideMachine{
+			nvidiaCarbideMachine := &infrastructurev1beta1.NcxInfraMachine{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      machineName,
 					Namespace: testNamespace,
@@ -223,7 +223,7 @@ var _ = Describe("Live NVIDIA Carbide Cluster E2E", Label("live"), func() {
 						clusterv1.ClusterNameLabel: clusterName,
 					},
 				},
-				Spec: infrastructurev1beta1.NvidiaCarbideMachineSpec{
+				Spec: infrastructurev1beta1.NcxInfraMachineSpec{
 					InstanceType: infrastructurev1beta1.InstanceTypeSpec{
 						MachineID: machineID,
 					},
@@ -238,7 +238,7 @@ var _ = Describe("Live NVIDIA Carbide Cluster E2E", Label("live"), func() {
 			}
 			Expect(k8sClient.Create(ctx, nvidiaCarbideMachine)).To(Succeed())
 
-			By("Waiting for NvidiaCarbideMachine to be ready")
+			By("Waiting for NcxInfraMachine to be ready")
 			waitForMachineReady(ctx, k8sClient, nvidiaCarbideMachine)
 
 			By("Verifying machine status fields are populated")
@@ -248,13 +248,13 @@ var _ = Describe("Live NVIDIA Carbide Cluster E2E", Label("live"), func() {
 			By("Verifying machine has a provider ID")
 			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(nvidiaCarbideMachine), nvidiaCarbideMachine)).To(Succeed())
 			Expect(nvidiaCarbideMachine.Spec.ProviderID).NotTo(BeNil())
-			Expect(*nvidiaCarbideMachine.Spec.ProviderID).To(HavePrefix("nvidia-carbide://"))
+			Expect(*nvidiaCarbideMachine.Spec.ProviderID).To(HavePrefix("ncx-infra://"))
 
 			By("Deleting the machine")
 			Expect(k8sClient.Delete(ctx, machine)).To(Succeed())
 			Expect(k8sClient.Delete(ctx, nvidiaCarbideMachine)).To(Succeed())
 
-			By("Waiting for NvidiaCarbideMachine to be deleted")
+			By("Waiting for NcxInfraMachine to be deleted")
 			Eventually(func() bool {
 				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(nvidiaCarbideMachine), nvidiaCarbideMachine)
 				return err != nil
@@ -264,7 +264,7 @@ var _ = Describe("Live NVIDIA Carbide Cluster E2E", Label("live"), func() {
 			Expect(k8sClient.Delete(ctx, cluster)).To(Succeed())
 			Expect(k8sClient.Delete(ctx, nvidiaCarbideCluster)).To(Succeed())
 
-			By("Waiting for NvidiaCarbideCluster to be deleted")
+			By("Waiting for NcxInfraCluster to be deleted")
 			Eventually(func() bool {
 				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(nvidiaCarbideCluster), nvidiaCarbideCluster)
 				return err != nil

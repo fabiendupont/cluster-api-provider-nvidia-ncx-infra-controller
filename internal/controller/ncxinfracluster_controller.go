@@ -40,15 +40,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	infrastructurev1 "github.com/fabiendupont/cluster-api-provider-nvidia-carbide/api/v1beta1"
-	carbidemetrics "github.com/fabiendupont/cluster-api-provider-nvidia-carbide/internal/metrics"
-	"github.com/fabiendupont/cluster-api-provider-nvidia-carbide/pkg/scope"
-	bmm "github.com/nvidia/bare-metal-manager-rest/sdk/standard"
+	infrastructurev1 "github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/api/v1beta1"
+	ncxinframetrics "github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/internal/metrics"
+	"github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/pkg/scope"
+	nico "github.com/NVIDIA/ncx-infra-controller-rest/sdk/standard"
 )
 
 const (
-	// NvidiaCarbideClusterFinalizer allows cleanup of NVIDIA Carbide resources before deletion
-	NvidiaCarbideClusterFinalizer = "nvidiacarbidecluster.infrastructure.cluster.x-k8s.io"
+	// NcxInfraClusterFinalizer allows cleanup of NVIDIA Carbide resources before deletion
+	NcxInfraClusterFinalizer = "ncxinfracluster.infrastructure.cluster.x-k8s.io"
 )
 
 // Condition types
@@ -57,36 +57,37 @@ const (
 	SubnetsReadyCondition    clusterv1.ConditionType = "SubnetsReady"
 	NSGReadyCondition        clusterv1.ConditionType = "NSGReady"
 	AllocationReadyCondition clusterv1.ConditionType = "AllocationReady"
+	VPCPeeringReadyCondition clusterv1.ConditionType = "VPCPeeringReady"
 )
 
 // resourceTypeIPBlock is the Carbide allocation resource type for IP blocks.
 const resourceTypeIPBlock = "IPBlock"
 
-// NvidiaCarbideClusterReconciler reconciles a NvidiaCarbideCluster object
-type NvidiaCarbideClusterReconciler struct {
+// NcxInfraClusterReconciler reconciles a NcxInfraCluster object
+type NcxInfraClusterReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
 
-	// NvidiaCarbideClient can be set for testing to inject a mock client
-	NvidiaCarbideClient scope.NvidiaCarbideClientInterface
+	// NcxInfraClient can be set for testing to inject a mock client
+	NcxInfraClient scope.NcxInfraClientInterface
 	// OrgName can be set for testing
 	OrgName string
 }
 
-// +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=nvidiacarbideclusters,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=nvidiacarbideclusters/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=nvidiacarbideclusters/finalizers,verbs=update
+// +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=ncxinfraclusters,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=ncxinfraclusters/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=ncxinfraclusters/finalizers,verbs=update
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
-// Reconcile handles NvidiaCarbideCluster reconciliation
-func (r *NvidiaCarbideClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+// Reconcile handles NcxInfraCluster reconciliation
+func (r *NcxInfraClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	// Fetch the NvidiaCarbideCluster instance
-	nvidiaCarbideCluster := &infrastructurev1.NvidiaCarbideCluster{}
+	// Fetch the NcxInfraCluster instance
+	nvidiaCarbideCluster := &infrastructurev1.NcxInfraCluster{}
 	if err := r.Get(ctx, req.NamespacedName, nvidiaCarbideCluster); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
@@ -100,13 +101,13 @@ func (r *NvidiaCarbideClusterReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{}, err
 	}
 	if cluster == nil {
-		logger.Info("Waiting for Cluster Controller to set OwnerRef on NvidiaCarbideCluster")
+		logger.Info("Waiting for Cluster Controller to set OwnerRef on NcxInfraCluster")
 		return ctrl.Result{}, nil
 	}
 
 	// Check if cluster is paused
 	if annotations.IsPaused(cluster, nvidiaCarbideCluster) {
-		logger.Info("NvidiaCarbideCluster or Cluster is marked as paused, skipping reconciliation")
+		logger.Info("NcxInfraCluster or Cluster is marked as paused, skipping reconciliation")
 		return ctrl.Result{}, nil
 	}
 
@@ -119,7 +120,7 @@ func (r *NvidiaCarbideClusterReconciler) Reconcile(ctx context.Context, req ctrl
 	// Always attempt to patch the object and status after each reconciliation
 	defer func() {
 		if err := patchHelper.Patch(ctx, nvidiaCarbideCluster); err != nil {
-			logger.Error(err, "failed to patch NvidiaCarbideCluster")
+			logger.Error(err, "failed to patch NcxInfraCluster")
 		}
 	}()
 
@@ -127,8 +128,8 @@ func (r *NvidiaCarbideClusterReconciler) Reconcile(ctx context.Context, req ctrl
 	clusterScope, err := scope.NewClusterScope(ctx, scope.ClusterScopeParams{
 		Client:               r.Client,
 		Cluster:              cluster,
-		NvidiaCarbideCluster: nvidiaCarbideCluster,
-		NvidiaCarbideClient:  r.NvidiaCarbideClient, // Will be nil in production, set for tests
+		NcxInfraCluster: nvidiaCarbideCluster,
+		NcxInfraClient:  r.NcxInfraClient, // Will be nil in production, set for tests
 		OrgName:              r.OrgName,             // Will be empty in production (fetched from secret), set for tests
 	})
 	if err != nil {
@@ -144,22 +145,22 @@ func (r *NvidiaCarbideClusterReconciler) Reconcile(ctx context.Context, req ctrl
 	return r.reconcileNormal(ctx, clusterScope)
 }
 
-func (r *NvidiaCarbideClusterReconciler) reconcileNormal(
+func (r *NcxInfraClusterReconciler) reconcileNormal(
 	ctx context.Context, clusterScope *scope.ClusterScope,
 ) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
-	logger.Info("Reconciling NvidiaCarbideCluster")
+	logger.Info("Reconciling NcxInfraCluster")
 
 	// Add finalizer if it doesn't exist
-	if !controllerutil.ContainsFinalizer(clusterScope.NvidiaCarbideCluster, NvidiaCarbideClusterFinalizer) {
-		controllerutil.AddFinalizer(clusterScope.NvidiaCarbideCluster, NvidiaCarbideClusterFinalizer)
+	if !controllerutil.ContainsFinalizer(clusterScope.NcxInfraCluster, NcxInfraClusterFinalizer) {
+		controllerutil.AddFinalizer(clusterScope.NcxInfraCluster, NcxInfraClusterFinalizer)
 		return ctrl.Result{Requeue: true}, nil
 	}
 
 	// Get Site ID
 	siteID, err := clusterScope.SiteID(ctx)
 	if err != nil {
-		conditions.Set(clusterScope.NvidiaCarbideCluster, metav1.Condition{
+		conditions.Set(clusterScope.NcxInfraCluster, metav1.Condition{
 			Type:    string(VPCReadyCondition),
 			Status:  metav1.ConditionFalse,
 			Reason:  "SiteNotFound",
@@ -171,7 +172,7 @@ func (r *NvidiaCarbideClusterReconciler) reconcileNormal(
 	// Ensure IP block and allocation exist before VPC creation
 	// (the tenant must have an allocation with the site to create VPCs)
 	if _, err := r.ensureIPBlockAndAllocation(ctx, clusterScope, siteID); err != nil {
-		conditions.Set(clusterScope.NvidiaCarbideCluster, metav1.Condition{
+		conditions.Set(clusterScope.NcxInfraCluster, metav1.Condition{
 			Type:    string(AllocationReadyCondition),
 			Status:  metav1.ConditionFalse,
 			Reason:  "AllocationFailed",
@@ -179,7 +180,7 @@ func (r *NvidiaCarbideClusterReconciler) reconcileNormal(
 		})
 		return ctrl.Result{}, err
 	}
-	conditions.Set(clusterScope.NvidiaCarbideCluster, metav1.Condition{
+	conditions.Set(clusterScope.NcxInfraCluster, metav1.Condition{
 		Type:   string(AllocationReadyCondition),
 		Status: metav1.ConditionTrue,
 		Reason: "AllocationReady",
@@ -187,7 +188,7 @@ func (r *NvidiaCarbideClusterReconciler) reconcileNormal(
 
 	// Reconcile VPC
 	if err := r.reconcileVPC(ctx, clusterScope, siteID); err != nil {
-		conditions.Set(clusterScope.NvidiaCarbideCluster, metav1.Condition{
+		conditions.Set(clusterScope.NcxInfraCluster, metav1.Condition{
 			Type:    string(VPCReadyCondition),
 			Status:  metav1.ConditionFalse,
 			Reason:  "VPCReconcileFailed",
@@ -195,7 +196,7 @@ func (r *NvidiaCarbideClusterReconciler) reconcileNormal(
 		})
 		return ctrl.Result{}, err
 	}
-	conditions.Set(clusterScope.NvidiaCarbideCluster, metav1.Condition{
+	conditions.Set(clusterScope.NcxInfraCluster, metav1.Condition{
 		Type:   string(VPCReadyCondition),
 		Status: metav1.ConditionTrue,
 		Reason: "VPCReady",
@@ -203,7 +204,7 @@ func (r *NvidiaCarbideClusterReconciler) reconcileNormal(
 
 	// Reconcile Subnets
 	if err := r.reconcileSubnets(ctx, clusterScope, siteID); err != nil {
-		conditions.Set(clusterScope.NvidiaCarbideCluster, metav1.Condition{
+		conditions.Set(clusterScope.NcxInfraCluster, metav1.Condition{
 			Type:    string(SubnetsReadyCondition),
 			Status:  metav1.ConditionFalse,
 			Reason:  "SubnetReconcileFailed",
@@ -211,16 +212,16 @@ func (r *NvidiaCarbideClusterReconciler) reconcileNormal(
 		})
 		return ctrl.Result{}, err
 	}
-	conditions.Set(clusterScope.NvidiaCarbideCluster, metav1.Condition{
+	conditions.Set(clusterScope.NcxInfraCluster, metav1.Condition{
 		Type:   string(SubnetsReadyCondition),
 		Status: metav1.ConditionTrue,
 		Reason: "SubnetsReady",
 	})
 
 	// Reconcile VPC Prefixes (if specified, for FNN VPCs)
-	if len(clusterScope.NvidiaCarbideCluster.Spec.VPCPrefixes) > 0 {
+	if len(clusterScope.NcxInfraCluster.Spec.VPCPrefixes) > 0 {
 		if err := r.reconcileVPCPrefixes(ctx, clusterScope, siteID); err != nil {
-			conditions.Set(clusterScope.NvidiaCarbideCluster, metav1.Condition{
+			conditions.Set(clusterScope.NcxInfraCluster, metav1.Condition{
 				Type:    string(SubnetsReadyCondition),
 				Status:  metav1.ConditionFalse,
 				Reason:  "VPCPrefixReconcileFailed",
@@ -231,9 +232,9 @@ func (r *NvidiaCarbideClusterReconciler) reconcileNormal(
 	}
 
 	// Reconcile Network Security Group (if specified)
-	if clusterScope.NvidiaCarbideCluster.Spec.VPC.NetworkSecurityGroup != nil {
+	if clusterScope.NcxInfraCluster.Spec.VPC.NetworkSecurityGroup != nil {
 		if err := r.reconcileNSG(ctx, clusterScope, siteID); err != nil {
-			conditions.Set(clusterScope.NvidiaCarbideCluster, metav1.Condition{
+			conditions.Set(clusterScope.NcxInfraCluster, metav1.Condition{
 				Type:    string(NSGReadyCondition),
 				Status:  metav1.ConditionFalse,
 				Reason:  "NSGReconcileFailed",
@@ -241,28 +242,46 @@ func (r *NvidiaCarbideClusterReconciler) reconcileNormal(
 			})
 			return ctrl.Result{}, err
 		}
-		conditions.Set(clusterScope.NvidiaCarbideCluster, metav1.Condition{
+		conditions.Set(clusterScope.NcxInfraCluster, metav1.Condition{
 			Type:   string(NSGReadyCondition),
 			Status: metav1.ConditionTrue,
 			Reason: "NSGReady",
 		})
 	}
 
+	// Reconcile VPC Peerings (if specified)
+	if len(clusterScope.NcxInfraCluster.Spec.VPCPeerings) > 0 {
+		if err := r.reconcileVPCPeerings(ctx, clusterScope, siteID); err != nil {
+			conditions.Set(clusterScope.NcxInfraCluster, metav1.Condition{
+				Type:    string(VPCPeeringReadyCondition),
+				Status:  metav1.ConditionFalse,
+				Reason:  "VPCPeeringReconcileFailed",
+				Message: err.Error(),
+			})
+			return ctrl.Result{}, err
+		}
+		conditions.Set(clusterScope.NcxInfraCluster, metav1.Condition{
+			Type:   string(VPCPeeringReadyCondition),
+			Status: metav1.ConditionTrue,
+			Reason: "VPCPeeringReady",
+		})
+	}
+
 	// Mark cluster as ready
 	clusterScope.SetReady(true)
-	conditions.Set(clusterScope.NvidiaCarbideCluster, metav1.Condition{
+	conditions.Set(clusterScope.NcxInfraCluster, metav1.Condition{
 		Type:   string(clusterv1.ReadyCondition),
 		Status: metav1.ConditionTrue,
-		Reason: "NvidiaCarbideClusterReady",
+		Reason: "NcxInfraClusterReady",
 	})
 
-	r.recordEvent(clusterScope.NvidiaCarbideCluster, "ClusterInfrastructureReady",
+	r.recordEvent(clusterScope.NcxInfraCluster, "ClusterInfrastructureReady",
 		"Cluster infrastructure is ready")
-	logger.Info("Successfully reconciled NvidiaCarbideCluster")
+	logger.Info("Successfully reconciled NcxInfraCluster")
 	return ctrl.Result{}, nil
 }
 
-func (r *NvidiaCarbideClusterReconciler) reconcileVPC(
+func (r *NcxInfraClusterReconciler) reconcileVPC(
 	ctx context.Context, clusterScope *scope.ClusterScope, siteID string,
 ) error {
 	logger := log.FromContext(ctx)
@@ -270,7 +289,7 @@ func (r *NvidiaCarbideClusterReconciler) reconcileVPC(
 	// Check if VPC already exists
 	if clusterScope.VPCID() != "" {
 		// Verify VPC still exists in NVIDIA Carbide
-		vpc, _, err := clusterScope.NvidiaCarbideClient.GetVpc(ctx, clusterScope.OrgName, clusterScope.VPCID())
+		vpc, _, err := clusterScope.NcxInfraClient.GetVpc(ctx, clusterScope.OrgName, clusterScope.VPCID())
 		if err != nil {
 			logger.Error(err, "VPC not found in NVIDIA Carbide, will recreate", "vpcID", clusterScope.VPCID())
 			clusterScope.SetVPCID("")
@@ -284,21 +303,21 @@ func (r *NvidiaCarbideClusterReconciler) reconcileVPC(
 	}
 
 	// Create VPC
-	vpcSpec := clusterScope.NvidiaCarbideCluster.Spec.VPC
+	vpcSpec := clusterScope.NcxInfraCluster.Spec.VPC
 
-	vpcReq := bmm.VpcCreateRequest{
+	vpcReq := nico.VpcCreateRequest{
 		Name:   vpcSpec.Name,
 		SiteId: siteID,
 	}
 	if vpcSpec.NetworkVirtualizationType != "" {
 		netVirtType := vpcSpec.NetworkVirtualizationType
-		vpcReq.NetworkVirtualizationType = *bmm.NewNullableString(&netVirtType)
+		vpcReq.NetworkVirtualizationType = *nico.NewNullableString(&netVirtType)
 	}
 	if vpcSpec.NVLinkLogicalPartitionID != "" {
-		vpcReq.NvLinkLogicalPartitionId = *bmm.NewNullableString(&vpcSpec.NVLinkLogicalPartitionID)
+		vpcReq.NvLinkLogicalPartitionId = *nico.NewNullableString(&vpcSpec.NVLinkLogicalPartitionID)
 	}
 	if vpcSpec.Vni != nil {
-		vpcReq.Vni = *bmm.NewNullableInt32(vpcSpec.Vni)
+		vpcReq.Vni = *nico.NewNullableInt32(vpcSpec.Vni)
 	}
 	if vpcSpec.Description != "" {
 		vpcReq.Description = &vpcSpec.Description
@@ -308,7 +327,7 @@ func (r *NvidiaCarbideClusterReconciler) reconcileVPC(
 	}
 
 	logger.Info("Creating VPC", "name", vpcSpec.Name, "siteID", siteID)
-	vpc, httpResp, err := clusterScope.NvidiaCarbideClient.CreateVpc(ctx, clusterScope.OrgName, vpcReq)
+	vpc, httpResp, err := clusterScope.NcxInfraClient.CreateVpc(ctx, clusterScope.OrgName, vpcReq)
 	if err != nil {
 		return fmt.Errorf("failed to create VPC: %w", err)
 	}
@@ -323,9 +342,9 @@ func (r *NvidiaCarbideClusterReconciler) reconcileVPC(
 
 	clusterScope.SetVPCID(*vpc.Id)
 	logger.Info("Successfully created VPC", "vpcID", *vpc.Id)
-	r.recordEvent(clusterScope.NvidiaCarbideCluster, "VPCCreated",
+	r.recordEvent(clusterScope.NcxInfraCluster, "VPCCreated",
 		"Successfully created VPC %s", *vpc.Id)
-	carbidemetrics.VPCCount.WithLabelValues(siteID).Inc()
+	ncxinframetrics.VPCCount.WithLabelValues(siteID).Inc()
 
 	return nil
 }
@@ -343,14 +362,14 @@ func parseCIDR(cidr string) (prefixLength int, err error) {
 // ensureIPBlockAndAllocation ensures an IP block and allocation exist for subnet allocation.
 // The allocation creates a child IP block owned by the tenant, which must be used for subnets.
 // Returns the child IP block ID.
-func (r *NvidiaCarbideClusterReconciler) ensureIPBlockAndAllocation(
+func (r *NcxInfraClusterReconciler) ensureIPBlockAndAllocation(
 	ctx context.Context, clusterScope *scope.ClusterScope, siteID string,
 ) (string, error) {
 	logger := log.FromContext(ctx)
 
 	// If we already have a child IP block ID, verify it exists
 	if clusterScope.ChildIPBlockID() != "" {
-		ipBlock, _, err := clusterScope.NvidiaCarbideClient.GetIpblock(ctx, clusterScope.OrgName, clusterScope.ChildIPBlockID())
+		ipBlock, _, err := clusterScope.NcxInfraClient.GetIpblock(ctx, clusterScope.OrgName, clusterScope.ChildIPBlockID())
 		if err == nil && ipBlock != nil {
 			logger.V(1).Info("Child IP block already exists", "childIPBlockID", clusterScope.ChildIPBlockID())
 			return clusterScope.ChildIPBlockID(), nil
@@ -363,8 +382,8 @@ func (r *NvidiaCarbideClusterReconciler) ensureIPBlockAndAllocation(
 	// Step 1: Create parent IP block if needed
 	parentIPBlockID := clusterScope.IPBlockID()
 	if parentIPBlockID == "" {
-		ipBlockName := fmt.Sprintf("%s-ipblock", clusterScope.NvidiaCarbideCluster.Name)
-		ipBlockReq := bmm.IpBlockCreateRequest{
+		ipBlockName := fmt.Sprintf("%s-ipblock", clusterScope.NcxInfraCluster.Name)
+		ipBlockReq := nico.IpBlockCreateRequest{
 			Name:            ipBlockName,
 			Prefix:          "10.0.0.0",
 			PrefixLength:    16,
@@ -374,7 +393,7 @@ func (r *NvidiaCarbideClusterReconciler) ensureIPBlockAndAllocation(
 		}
 
 		logger.Info("Creating IP block", "name", ipBlockName, "prefix", "10.0.0.0/16", "siteID", siteID)
-		ipBlock, httpResp, err := clusterScope.NvidiaCarbideClient.CreateIpblock(ctx, clusterScope.OrgName, ipBlockReq)
+		ipBlock, httpResp, err := clusterScope.NcxInfraClient.CreateIpblock(ctx, clusterScope.OrgName, ipBlockReq)
 		if err != nil {
 			return "", fmt.Errorf("failed to create IP block: %w", err)
 		}
@@ -392,13 +411,13 @@ func (r *NvidiaCarbideClusterReconciler) ensureIPBlockAndAllocation(
 
 	// Step 2: Create allocation to link tenant to IP block (creates child IP block)
 	if clusterScope.AllocationID() == "" {
-		allocName := fmt.Sprintf("%s-allocation", clusterScope.NvidiaCarbideCluster.Name)
+		allocName := fmt.Sprintf("%s-allocation", clusterScope.NcxInfraCluster.Name)
 		resourceType := resourceTypeIPBlock
-		allocReq := bmm.AllocationCreateRequest{
+		allocReq := nico.AllocationCreateRequest{
 			Name:     allocName,
 			TenantId: clusterScope.TenantID(),
 			SiteId:   siteID,
-			AllocationConstraints: []bmm.AllocationConstraintCreateRequest{
+			AllocationConstraints: []nico.AllocationConstraintCreateRequest{
 				{
 					ResourceType:    &resourceType,
 					ResourceTypeId:  parentIPBlockID,
@@ -409,7 +428,7 @@ func (r *NvidiaCarbideClusterReconciler) ensureIPBlockAndAllocation(
 		}
 
 		logger.Info("Creating allocation", "name", allocName, "tenantID", clusterScope.TenantID(), "siteID", siteID)
-		alloc, httpResp, err := clusterScope.NvidiaCarbideClient.CreateAllocation(ctx, clusterScope.OrgName, allocReq)
+		alloc, httpResp, err := clusterScope.NcxInfraClient.CreateAllocation(ctx, clusterScope.OrgName, allocReq)
 
 		// The SDK may fail to deserialize the response (e.g., unrecognized status enum)
 		// even when the allocation was created successfully. Check the HTTP status first.
@@ -445,7 +464,7 @@ func (r *NvidiaCarbideClusterReconciler) ensureIPBlockAndAllocation(
 
 	// If we have an allocation ID but no child IP block ID, query the allocation
 	if clusterScope.AllocationID() != "" && clusterScope.ChildIPBlockID() == "" {
-		alloc, _, err := clusterScope.NvidiaCarbideClient.GetAllocation(ctx, clusterScope.OrgName, clusterScope.AllocationID())
+		alloc, _, err := clusterScope.NcxInfraClient.GetAllocation(ctx, clusterScope.OrgName, clusterScope.AllocationID())
 		if err != nil {
 			return "", fmt.Errorf("failed to get allocation %s: %w", clusterScope.AllocationID(), err)
 		}
@@ -463,8 +482,8 @@ func (r *NvidiaCarbideClusterReconciler) ensureIPBlockAndAllocation(
 }
 
 // extractChildIPBlockID extracts the child IP block ID from an allocation's constraints.
-func (r *NvidiaCarbideClusterReconciler) extractChildIPBlockID(
-	clusterScope *scope.ClusterScope, alloc *bmm.Allocation,
+func (r *NcxInfraClusterReconciler) extractChildIPBlockID(
+	clusterScope *scope.ClusterScope, alloc *nico.Allocation,
 ) {
 	for _, ac := range alloc.AllocationConstraints {
 		if ac.ResourceType != nil && *ac.ResourceType == resourceTypeIPBlock {
@@ -477,12 +496,12 @@ func (r *NvidiaCarbideClusterReconciler) extractChildIPBlockID(
 }
 
 // findExistingAllocation queries all allocations and returns the one matching the given name.
-func (r *NvidiaCarbideClusterReconciler) findExistingAllocation(
+func (r *NcxInfraClusterReconciler) findExistingAllocation(
 	ctx context.Context, clusterScope *scope.ClusterScope, name string,
-) (*bmm.Allocation, error) {
+) (*nico.Allocation, error) {
 	// The GetAllAllocation SDK method doesn't support name filtering directly,
 	// so we fetch all and filter client-side.
-	allocations, _, err := clusterScope.NvidiaCarbideClient.GetAllAllocation(ctx, clusterScope.OrgName)
+	allocations, _, err := clusterScope.NcxInfraClient.GetAllAllocation(ctx, clusterScope.OrgName)
 	if err != nil {
 		return nil, err
 	}
@@ -494,7 +513,7 @@ func (r *NvidiaCarbideClusterReconciler) findExistingAllocation(
 	return nil, nil
 }
 
-func (r *NvidiaCarbideClusterReconciler) reconcileSubnets(
+func (r *NcxInfraClusterReconciler) reconcileSubnets(
 	ctx context.Context, clusterScope *scope.ClusterScope, siteID string,
 ) error {
 	logger := log.FromContext(ctx)
@@ -513,11 +532,11 @@ func (r *NvidiaCarbideClusterReconciler) reconcileSubnets(
 	subnetIDs := clusterScope.SubnetIDs()
 
 	// Reconcile each subnet
-	for _, subnetSpec := range clusterScope.NvidiaCarbideCluster.Spec.Subnets {
+	for _, subnetSpec := range clusterScope.NcxInfraCluster.Spec.Subnets {
 		// Check if subnet already exists
 		if existingID, exists := subnetIDs[subnetSpec.Name]; exists {
 			// Verify subnet still exists in NVIDIA Carbide
-			subnet, _, err := clusterScope.NvidiaCarbideClient.GetSubnet(ctx, clusterScope.OrgName, existingID)
+			subnet, _, err := clusterScope.NcxInfraClient.GetSubnet(ctx, clusterScope.OrgName, existingID)
 			if err != nil || subnet == nil {
 				logger.Error(err, "Subnet not found in NVIDIA Carbide, will recreate",
 					"subnetName", subnetSpec.Name, "subnetID", existingID)
@@ -535,7 +554,7 @@ func (r *NvidiaCarbideClusterReconciler) reconcileSubnets(
 		}
 
 		// Create subnet using child IP block (tenant-owned, from allocation)
-		subnetReq := bmm.SubnetCreateRequest{
+		subnetReq := nico.SubnetCreateRequest{
 			Name:         subnetSpec.Name,
 			VpcId:        vpcID,
 			Ipv4BlockId:  &childIPBlockID,
@@ -546,7 +565,7 @@ func (r *NvidiaCarbideClusterReconciler) reconcileSubnets(
 			"name", subnetSpec.Name, "cidr", subnetSpec.CIDR,
 			"prefixLength", prefixLength, "vpcID", vpcID,
 			"childIPBlockID", childIPBlockID)
-		subnet, httpResp, err := clusterScope.NvidiaCarbideClient.CreateSubnet(ctx, clusterScope.OrgName, subnetReq)
+		subnet, httpResp, err := clusterScope.NcxInfraClient.CreateSubnet(ctx, clusterScope.OrgName, subnetReq)
 		if err != nil {
 			return fmt.Errorf("failed to create subnet %s: %w", subnetSpec.Name, err)
 		}
@@ -561,14 +580,14 @@ func (r *NvidiaCarbideClusterReconciler) reconcileSubnets(
 
 		clusterScope.SetSubnetID(subnetSpec.Name, *subnet.Id)
 		logger.Info("Successfully created subnet", "subnetName", subnetSpec.Name, "subnetID", *subnet.Id)
-		r.recordEvent(clusterScope.NvidiaCarbideCluster, "SubnetCreated",
+		r.recordEvent(clusterScope.NcxInfraCluster, "SubnetCreated",
 			"Successfully created subnet %s (%s)", subnetSpec.Name, *subnet.Id)
 	}
 
 	return nil
 }
 
-func (r *NvidiaCarbideClusterReconciler) reconcileVPCPrefixes(
+func (r *NcxInfraClusterReconciler) reconcileVPCPrefixes(
 	ctx context.Context, clusterScope *scope.ClusterScope, siteID string,
 ) error {
 	logger := log.FromContext(ctx)
@@ -586,10 +605,10 @@ func (r *NvidiaCarbideClusterReconciler) reconcileVPCPrefixes(
 
 	vpcPrefixIDs := clusterScope.VPCPrefixIDs()
 
-	for _, prefixSpec := range clusterScope.NvidiaCarbideCluster.Spec.VPCPrefixes {
+	for _, prefixSpec := range clusterScope.NcxInfraCluster.Spec.VPCPrefixes {
 		// Check if VPC Prefix already exists
 		if existingID, exists := vpcPrefixIDs[prefixSpec.Name]; exists {
-			prefix, _, err := clusterScope.NvidiaCarbideClient.GetVpcPrefix(ctx, clusterScope.OrgName, existingID)
+			prefix, _, err := clusterScope.NcxInfraClient.GetVpcPrefix(ctx, clusterScope.OrgName, existingID)
 			if err != nil || prefix == nil {
 				logger.Error(err, "VPC Prefix not found, will recreate",
 					"prefixName", prefixSpec.Name, "prefixID", existingID)
@@ -605,7 +624,7 @@ func (r *NvidiaCarbideClusterReconciler) reconcileVPCPrefixes(
 			return fmt.Errorf("failed to parse CIDR for VPC prefix %s: %w", prefixSpec.Name, err)
 		}
 
-		prefixReq := bmm.VpcPrefixCreateRequest{
+		prefixReq := nico.VpcPrefixCreateRequest{
 			Name:         prefixSpec.Name,
 			VpcId:        vpcID,
 			IpBlockId:    &childIPBlockID,
@@ -615,7 +634,7 @@ func (r *NvidiaCarbideClusterReconciler) reconcileVPCPrefixes(
 		logger.Info("Creating VPC Prefix",
 			"name", prefixSpec.Name, "cidr", prefixSpec.CIDR,
 			"prefixLength", prefixLength, "vpcID", vpcID)
-		prefix, httpResp, err := clusterScope.NvidiaCarbideClient.CreateVpcPrefix(ctx, clusterScope.OrgName, prefixReq)
+		prefix, httpResp, err := clusterScope.NcxInfraClient.CreateVpcPrefix(ctx, clusterScope.OrgName, prefixReq)
 		if err != nil {
 			return fmt.Errorf("failed to create VPC prefix %s: %w", prefixSpec.Name, err)
 		}
@@ -630,24 +649,82 @@ func (r *NvidiaCarbideClusterReconciler) reconcileVPCPrefixes(
 
 		clusterScope.SetVPCPrefixID(prefixSpec.Name, *prefix.Id)
 		logger.Info("Successfully created VPC Prefix", "prefixName", prefixSpec.Name, "prefixID", *prefix.Id)
-		r.recordEvent(clusterScope.NvidiaCarbideCluster, "VPCPrefixCreated",
+		r.recordEvent(clusterScope.NcxInfraCluster, "VPCPrefixCreated",
 			"Successfully created VPC Prefix %s (%s)", prefixSpec.Name, *prefix.Id)
 	}
 
 	return nil
 }
 
-func (r *NvidiaCarbideClusterReconciler) reconcileNSG(
+func (r *NcxInfraClusterReconciler) reconcileVPCPeerings(
 	ctx context.Context, clusterScope *scope.ClusterScope, siteID string,
 ) error {
 	logger := log.FromContext(ctx)
 
-	nsgSpec := clusterScope.NvidiaCarbideCluster.Spec.VPC.NetworkSecurityGroup
+	vpcID := clusterScope.VPCID()
+	if vpcID == "" {
+		return fmt.Errorf("VPC ID is empty")
+	}
+
+	peeringIDs := clusterScope.VPCPeeringIDs()
+
+	for _, peeringSpec := range clusterScope.NcxInfraCluster.Spec.VPCPeerings {
+		// Check if peering already exists
+		if existingID, exists := peeringIDs[peeringSpec.PeerVPCID]; exists {
+			peering, _, err := clusterScope.NcxInfraClient.GetVpcPeering(ctx, clusterScope.OrgName, existingID)
+			if err != nil || peering == nil {
+				logger.Error(err, "VPC Peering not found, will recreate",
+					"peerVpcId", peeringSpec.PeerVPCID, "peeringID", existingID)
+				delete(peeringIDs, peeringSpec.PeerVPCID)
+			} else {
+				logger.V(1).Info("VPC Peering already exists",
+					"peerVpcId", peeringSpec.PeerVPCID, "peeringID", existingID)
+				continue
+			}
+		}
+
+		peeringReq := nico.VpcPeeringCreateRequest{
+			Vpc1Id: vpcID,
+			Vpc2Id: peeringSpec.PeerVPCID,
+			SiteId: siteID,
+		}
+
+		logger.Info("Creating VPC Peering",
+			"vpc1Id", vpcID, "vpc2Id", peeringSpec.PeerVPCID, "siteID", siteID)
+		peering, httpResp, err := clusterScope.NcxInfraClient.CreateVpcPeering(ctx, clusterScope.OrgName, peeringReq)
+		if err != nil {
+			return fmt.Errorf("failed to create VPC peering with %s: %w", peeringSpec.PeerVPCID, err)
+		}
+
+		if httpResp.StatusCode != http.StatusCreated {
+			return fmt.Errorf("failed to create VPC peering with %s, status %d", peeringSpec.PeerVPCID, httpResp.StatusCode)
+		}
+
+		if peering == nil || peering.Id == nil {
+			return fmt.Errorf("VPC peering ID missing in response for peer %s", peeringSpec.PeerVPCID)
+		}
+
+		clusterScope.SetVPCPeeringID(peeringSpec.PeerVPCID, *peering.Id)
+		logger.Info("Successfully created VPC Peering",
+			"peerVpcId", peeringSpec.PeerVPCID, "peeringID", *peering.Id)
+		r.recordEvent(clusterScope.NcxInfraCluster, "VPCPeeringCreated",
+			"Successfully created VPC Peering %s with peer %s", *peering.Id, peeringSpec.PeerVPCID)
+	}
+
+	return nil
+}
+
+func (r *NcxInfraClusterReconciler) reconcileNSG(
+	ctx context.Context, clusterScope *scope.ClusterScope, siteID string,
+) error {
+	logger := log.FromContext(ctx)
+
+	nsgSpec := clusterScope.NcxInfraCluster.Spec.VPC.NetworkSecurityGroup
 
 	// Check if NSG already exists
 	if clusterScope.NSGID() != "" {
 		// Verify NSG still exists in NVIDIA Carbide
-		nsg, _, err := clusterScope.NvidiaCarbideClient.GetNetworkSecurityGroup(
+		nsg, _, err := clusterScope.NcxInfraClient.GetNetworkSecurityGroup(
 			ctx, clusterScope.OrgName, clusterScope.NSGID())
 		if err != nil || nsg == nil {
 			logger.Error(err, "NSG not found in NVIDIA Carbide, will recreate", "nsgID", clusterScope.NSGID())
@@ -659,7 +736,7 @@ func (r *NvidiaCarbideClusterReconciler) reconcileNSG(
 	}
 
 	// Convert NSG rules from CRD types to API types
-	rules := make([]bmm.NetworkSecurityGroupRule, 0, len(nsgSpec.Rules))
+	rules := make([]nico.NetworkSecurityGroupRule, 0, len(nsgSpec.Rules))
 	for _, rule := range nsgSpec.Rules {
 		// API requires both source and destination prefixes
 		// Use "0.0.0.0/0" as default (any) if not specified
@@ -670,8 +747,8 @@ func (r *NvidiaCarbideClusterReconciler) reconcileNSG(
 		destPrefix := "0.0.0.0/0" // Default to any destination
 
 		ruleName := rule.Name
-		nsgRule := bmm.NetworkSecurityGroupRule{
-			Name:              *bmm.NewNullableString(&ruleName),
+		nsgRule := nico.NetworkSecurityGroupRule{
+			Name:              *nico.NewNullableString(&ruleName),
 			Direction:         strings.ToLower(rule.Direction),
 			Protocol:          strings.ToLower(rule.Protocol),
 			Action:            strings.ToLower(rule.Action),
@@ -682,14 +759,14 @@ func (r *NvidiaCarbideClusterReconciler) reconcileNSG(
 		// Map port range to destination port range
 		if rule.PortRange != "" {
 			portRange := rule.PortRange
-			nsgRule.DestinationPortRange = *bmm.NewNullableString(&portRange)
+			nsgRule.DestinationPortRange = *nico.NewNullableString(&portRange)
 		}
 
 		rules = append(rules, nsgRule)
 	}
 
 	// Create NSG
-	nsgReq := bmm.NetworkSecurityGroupCreateRequest{
+	nsgReq := nico.NetworkSecurityGroupCreateRequest{
 		Name:   nsgSpec.Name,
 		SiteId: siteID,
 	}
@@ -698,7 +775,7 @@ func (r *NvidiaCarbideClusterReconciler) reconcileNSG(
 	}
 
 	logger.Info("Creating NSG", "name", nsgSpec.Name, "siteID", siteID)
-	nsg, httpResp, err := clusterScope.NvidiaCarbideClient.CreateNetworkSecurityGroup(ctx, clusterScope.OrgName, nsgReq)
+	nsg, httpResp, err := clusterScope.NcxInfraClient.CreateNetworkSecurityGroup(ctx, clusterScope.OrgName, nsgReq)
 	if err != nil {
 		return fmt.Errorf("failed to create NSG: %w", err)
 	}
@@ -713,34 +790,44 @@ func (r *NvidiaCarbideClusterReconciler) reconcileNSG(
 
 	clusterScope.SetNSGID(*nsg.Id)
 	logger.Info("Successfully created NSG", "nsgID", *nsg.Id)
-	r.recordEvent(clusterScope.NvidiaCarbideCluster, "NSGCreated",
+	r.recordEvent(clusterScope.NcxInfraCluster, "NSGCreated",
 		"Successfully created NSG %s", *nsg.Id)
 
 	return nil
 }
 
 //nolint:unparam // ctrl.Result is part of the reconciler interface contract
-func (r *NvidiaCarbideClusterReconciler) reconcileDelete(
+func (r *NcxInfraClusterReconciler) reconcileDelete(
 	ctx context.Context, clusterScope *scope.ClusterScope,
 ) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
-	logger.Info("Deleting NvidiaCarbideCluster")
+	logger.Info("Deleting NcxInfraCluster")
 
 	// Delete NSG if it exists
 	if clusterScope.NSGID() != "" {
 		logger.Info("Deleting NSG", "nsgID", clusterScope.NSGID())
 		if err := r.deleteResource(ctx, clusterScope, "NSG", clusterScope.NSGID(),
-			clusterScope.NvidiaCarbideClient.DeleteNetworkSecurityGroup); err != nil {
+			clusterScope.NcxInfraClient.DeleteNetworkSecurityGroup); err != nil {
 			return ctrl.Result{}, err
 		}
 		clusterScope.SetNSGID("")
+	}
+
+	// Delete VPC Peerings
+	for peerVPCID, peeringID := range clusterScope.VPCPeeringIDs() {
+		logger.Info("Deleting VPC Peering", "peerVpcId", peerVPCID, "peeringID", peeringID)
+		if err := r.deleteResource(ctx, clusterScope, "VPC peering", peeringID,
+			clusterScope.NcxInfraClient.DeleteVpcPeering); err != nil {
+			return ctrl.Result{}, err
+		}
+		delete(clusterScope.VPCPeeringIDs(), peerVPCID)
 	}
 
 	// Delete VPC Prefixes
 	for prefixName, prefixID := range clusterScope.VPCPrefixIDs() {
 		logger.Info("Deleting VPC Prefix", "prefixName", prefixName, "prefixID", prefixID)
 		if err := r.deleteResource(ctx, clusterScope, "VPC prefix", prefixID,
-			clusterScope.NvidiaCarbideClient.DeleteVpcPrefix); err != nil {
+			clusterScope.NcxInfraClient.DeleteVpcPrefix); err != nil {
 			return ctrl.Result{}, err
 		}
 		delete(clusterScope.VPCPrefixIDs(), prefixName)
@@ -750,7 +837,7 @@ func (r *NvidiaCarbideClusterReconciler) reconcileDelete(
 	for subnetName, subnetID := range clusterScope.SubnetIDs() {
 		logger.Info("Deleting subnet", "subnetName", subnetName, "subnetID", subnetID)
 		if err := r.deleteResource(ctx, clusterScope, "subnet", subnetID,
-			clusterScope.NvidiaCarbideClient.DeleteSubnet); err != nil {
+			clusterScope.NcxInfraClient.DeleteSubnet); err != nil {
 			return ctrl.Result{}, err
 		}
 		delete(clusterScope.SubnetIDs(), subnetName)
@@ -760,7 +847,7 @@ func (r *NvidiaCarbideClusterReconciler) reconcileDelete(
 	if clusterScope.AllocationID() != "" {
 		logger.Info("Deleting allocation", "allocationID", clusterScope.AllocationID())
 		if err := r.deleteResource(ctx, clusterScope, "allocation", clusterScope.AllocationID(),
-			clusterScope.NvidiaCarbideClient.DeleteAllocation); err != nil {
+			clusterScope.NcxInfraClient.DeleteAllocation); err != nil {
 			return ctrl.Result{}, err
 		}
 		clusterScope.SetAllocationID("")
@@ -770,7 +857,7 @@ func (r *NvidiaCarbideClusterReconciler) reconcileDelete(
 	if clusterScope.ChildIPBlockID() != "" {
 		logger.Info("Deleting child IP block", "childIPBlockID", clusterScope.ChildIPBlockID())
 		if err := r.deleteResource(ctx, clusterScope, "child IP block", clusterScope.ChildIPBlockID(),
-			clusterScope.NvidiaCarbideClient.DeleteIpblock); err != nil {
+			clusterScope.NcxInfraClient.DeleteIpblock); err != nil {
 			return ctrl.Result{}, err
 		}
 		clusterScope.SetChildIPBlockID("")
@@ -780,7 +867,7 @@ func (r *NvidiaCarbideClusterReconciler) reconcileDelete(
 	if clusterScope.IPBlockID() != "" {
 		logger.Info("Deleting parent IP block", "ipBlockID", clusterScope.IPBlockID())
 		if err := r.deleteResource(ctx, clusterScope, "parent IP block", clusterScope.IPBlockID(),
-			clusterScope.NvidiaCarbideClient.DeleteIpblock); err != nil {
+			clusterScope.NcxInfraClient.DeleteIpblock); err != nil {
 			return ctrl.Result{}, err
 		}
 		clusterScope.SetIPBlockID("")
@@ -790,21 +877,21 @@ func (r *NvidiaCarbideClusterReconciler) reconcileDelete(
 	if clusterScope.VPCID() != "" {
 		logger.Info("Deleting VPC", "vpcID", clusterScope.VPCID())
 		if err := r.deleteResource(ctx, clusterScope, "VPC", clusterScope.VPCID(),
-			clusterScope.NvidiaCarbideClient.DeleteVpc); err != nil {
+			clusterScope.NcxInfraClient.DeleteVpc); err != nil {
 			return ctrl.Result{}, err
 		}
 		clusterScope.SetVPCID("")
 	}
 
 	// Remove finalizer
-	controllerutil.RemoveFinalizer(clusterScope.NvidiaCarbideCluster, NvidiaCarbideClusterFinalizer)
+	controllerutil.RemoveFinalizer(clusterScope.NcxInfraCluster, NcxInfraClusterFinalizer)
 
-	logger.Info("Successfully deleted NvidiaCarbideCluster")
+	logger.Info("Successfully deleted NcxInfraCluster")
 	return ctrl.Result{}, nil
 }
 
 // deleteResource calls a delete API method and handles 404 (already deleted) gracefully.
-func (r *NvidiaCarbideClusterReconciler) deleteResource(
+func (r *NcxInfraClusterReconciler) deleteResource(
 	ctx context.Context, clusterScope *scope.ClusterScope,
 	resourceType, resourceID string,
 	deleteFn func(ctx context.Context, org string, id string) (*http.Response, error),
@@ -827,29 +914,29 @@ func (r *NvidiaCarbideClusterReconciler) deleteResource(
 }
 
 // recordEvent records a Normal event on the given object if a Recorder is set.
-func (r *NvidiaCarbideClusterReconciler) recordEvent(obj runtime.Object, reason, messageFmt string, args ...interface{}) {
+func (r *NcxInfraClusterReconciler) recordEvent(obj runtime.Object, reason, messageFmt string, args ...interface{}) {
 	if r.Recorder != nil {
 		r.Recorder.Eventf(obj, corev1.EventTypeNormal, reason, messageFmt, args...)
 	}
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *NvidiaCarbideClusterReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
+func (r *NcxInfraClusterReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&infrastructurev1.NvidiaCarbideCluster{}).
+		For(&infrastructurev1.NcxInfraCluster{}).
 		Watches(
 			&clusterv1.Cluster{},
 			handler.EnqueueRequestsFromMapFunc(
 				util.ClusterToInfrastructureMapFunc(
 					ctx,
-					infrastructurev1.GroupVersion.WithKind("NvidiaCarbideCluster"),
+					infrastructurev1.GroupVersion.WithKind("NcxInfraCluster"),
 					mgr.GetClient(),
-					&infrastructurev1.NvidiaCarbideCluster{},
+					&infrastructurev1.NcxInfraCluster{},
 				),
 			),
 		).
 		WithEventFilter(predicates.ResourceNotPausedAndHasFilterLabel(
-			mgr.GetScheme(), ctrl.Log.WithName("nvidiacarbidecluster"), "")).
-		Named("nvidiacarbidecluster").
+			mgr.GetScheme(), ctrl.Log.WithName("ncxinfracluster"), "")).
+		Named("ncxinfracluster").
 		Complete(r)
 }

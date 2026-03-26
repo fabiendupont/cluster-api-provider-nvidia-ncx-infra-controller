@@ -11,20 +11,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      KUBECONFIG: /tmp/carbide-e2e-kubeconfig
-      NVIDIA_CARBIDE_API_ENDPOINT: http://localhost:8388
-      NVIDIA_CARBIDE_KEYCLOAK_URL: http://localhost:8082
-      NVIDIA_CARBIDE_API_ENDPOINT_INTERNAL: http://carbide-rest-api.carbide-rest.svc:8388
-      IMG: localhost/cluster-api-provider-nvidia-carbide:e2e
+      KUBECONFIG: /tmp/ncx-e2e-kubeconfig
+      NCX_INFRA_API_ENDPOINT: http://localhost:8388
+      NCX_INFRA_KEYCLOAK_URL: http://localhost:8082
+      NCX_INFRA_API_ENDPOINT_INTERNAL: http://carbide-rest-api.carbide-rest.svc:8388
+      IMG: localhost/cluster-api-provider-nvidia-ncx-infra-controller:e2e
     steps:
       - name: Checkout provider
         uses: actions/checkout@v4
 
-      - name: Checkout NVIDIA bare-metal-manager-rest
+      - name: Checkout NVIDIA ncx-infra-controller-rest
         uses: actions/checkout@v4
         with:
-          repository: NVIDIA/bare-metal-manager-rest
-          path: bare-metal-manager-rest
+          repository: NVIDIA/ncx-infra-controller-rest
+          path: ncx-infra-controller-rest
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -34,14 +34,14 @@ jobs:
       - name: Increase inotify limits
         run: sudo sysctl -w fs.inotify.max_user_instances=512
 
-      - name: Deploy Carbide REST stack
+      - name: Deploy NCX Infra Controller REST stack
         run: make kind-reset
-        working-directory: bare-metal-manager-rest
+        working-directory: ncx-infra-controller-rest
         timeout-minutes: 20
         env:
           KUBECONFIG: ""
 
-      - name: Verify Carbide API health
+      - name: Verify NCX Infra Controller API health
         run: |
           for i in $(seq 1 30); do
             if curl -sf http://localhost:8388/healthz; then
@@ -86,20 +86,20 @@ jobs:
           make deploy IMG=$IMG
           kubectl wait --for=condition=Available deployment \
             -l control-plane=controller-manager \
-            -n cluster-api-provider-nvidia-carbide-system --timeout=5m || {
+            -n cluster-api-provider-nvidia-ncx-infra-controller-system --timeout=5m || {
             echo "=== Deployment status ==="
-            kubectl get deployment -n cluster-api-provider-nvidia-carbide-system -o wide
+            kubectl get deployment -n cluster-api-provider-nvidia-ncx-infra-controller-system -o wide
             echo "=== Pod status ==="
-            kubectl get pods -n cluster-api-provider-nvidia-carbide-system -o wide
+            kubectl get pods -n cluster-api-provider-nvidia-ncx-infra-controller-system -o wide
             echo "=== Pod describe ==="
-            kubectl describe pods -n cluster-api-provider-nvidia-carbide-system
+            kubectl describe pods -n cluster-api-provider-nvidia-ncx-infra-controller-system
             echo "=== Pod logs ==="
             kubectl logs -l control-plane=controller-manager \
-              -n cluster-api-provider-nvidia-carbide-system --tail=100 || true
+              -n cluster-api-provider-nvidia-ncx-infra-controller-system --tail=100 || true
             echo "=== Certificate status ==="
-            kubectl get certificate -n cluster-api-provider-nvidia-carbide-system -o wide
+            kubectl get certificate -n cluster-api-provider-nvidia-ncx-infra-controller-system -o wide
             echo "=== Secrets ==="
-            kubectl get secrets -n cluster-api-provider-nvidia-carbide-system
+            kubectl get secrets -n cluster-api-provider-nvidia-ncx-infra-controller-system
             exit 1
           }
 
@@ -108,6 +108,6 @@ jobs:
           make test-e2e-live || true
           echo "=== Controller logs ==="
           kubectl logs -l control-plane=controller-manager \
-            -n cluster-api-provider-nvidia-carbide-system --tail=200
+            -n cluster-api-provider-nvidia-ncx-infra-controller-system --tail=200
           # Re-run to get correct exit code
           make test-e2e-live

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Phase 2 of the repository separation plan has been completed. The cluster-api-provider-nvidia-carbide now uses the auto-generated Go client from `github.com/NVIDIA/carbide-rest/client` instead of the custom `pkg/cloud` package.
+Phase 2 of the repository separation plan has been completed. The cluster-api-provider-nvidia-ncx-infra-controller now uses the auto-generated Go client from `github.com/NVIDIA/carbide-rest/client` instead of the custom `pkg/cloud` package.
 
 ## Major Changes
 
@@ -17,9 +17,9 @@ Phase 2 of the repository separation plan has been completed. The cluster-api-pr
 
 ### 2. Controller Updates
 
-#### NvidiaCarbideCluster Controller
+#### NcxInfraCluster Controller
 
-**File**: `internal/controller/nvidiacarbidecluster_controller.go`
+**File**: `internal/controller/ncxinfracluster_controller.go`
 
 **Key Changes:**
 - Uses `restclient.ClientWithResponses` from generated client
@@ -36,9 +36,9 @@ Phase 2 of the repository separation plan has been completed. The cluster-api-pr
 - CIDR string → IP block ID + prefix length
 - CRD field names → API field names (PortRange → DestinationPortRange, etc.)
 
-#### NvidiaCarbideMachine Controller
+#### NcxInfraMachine Controller
 
-**File**: `internal/controller/nvidiacarbidemachine_controller.go`
+**File**: `internal/controller/ncxinframachine_controller.go`
 
 **Key Changes:**
 - Uses `restclient.ClientWithResponses` for all API calls
@@ -73,9 +73,9 @@ Phase 2 of the repository separation plan has been completed. The cluster-api-pr
 
 ### 4. API Types (CRDs)
 
-#### NvidiaCarbideCluster Status
+#### NcxInfraCluster Status
 
-**File**: `api/v1beta1/nvidiacarbidecluster_types.go`
+**File**: `api/v1beta1/ncxinfracluster_types.go`
 
 **Added Field:**
 ```go
@@ -94,14 +94,14 @@ type NetworkStatus struct {
 
 **Benefits:**
 - Users only specify CIDR notation (Kubernetes-native)
-- Controller handles NVIDIA Carbide-specific IP block requirements
+- Controller handles NVIDIA NCX Infra Controller-specific IP block requirements
 - Matches AWS/Azure/GCP CAPI provider patterns
 - Transparent to users
 
 **Implementation:**
 ```go
 // ensureIPBlock creates a shared /16 IP block for all cluster subnets
-func (r *NvidiaCarbideClusterReconciler) ensureIPBlock(ctx context.Context, clusterScope *scope.ClusterScope, siteID string) (uuid.UUID, error) {
+func (r *NcxInfraClusterReconciler) ensureIPBlock(ctx context.Context, clusterScope *scope.ClusterScope, siteID string) (uuid.UUID, error) {
     // Check if IP block already exists
     if clusterScope.IPBlockID() != "" {
         // Return existing IP block
@@ -109,7 +109,7 @@ func (r *NvidiaCarbideClusterReconciler) ensureIPBlock(ctx context.Context, clus
 
     // Create new IP block: 10.0.0.0/16
     ipBlockReq := restclient.CreateIpblockJSONRequestBody{
-        Name:            fmt.Sprintf("%s-ipblock", clusterScope.NvidiaCarbideCluster.Name),
+        Name:            fmt.Sprintf("%s-ipblock", clusterScope.NcxInfraCluster.Name),
         Prefix:          "10.0.0.0",
         PrefixLength:    16,
         ProtocolVersion: restclient.Ipv4,
@@ -151,8 +151,8 @@ spec:
 **Documentation**: See `TESTING.md` for migration strategy
 
 **Test files affected:**
-- `internal/controller/nvidiacarbidecluster_controller_test.go`
-- `internal/controller/nvidiacarbidemachine_controller_test.go`
+- `internal/controller/ncxinfracluster_controller_test.go`
+- `internal/controller/ncxinframachine_controller_test.go`
 
 **Recommended approach**: HTTP test server mocking API endpoints
 
@@ -203,7 +203,7 @@ vpc := resp.JSON200
 
 All core packages build successfully:
 ```bash
-cd cluster-api-provider-nvidia-carbide
+cd cluster-api-provider-nvidia-ncx-infra-controller
 go build ./api/... ./internal/... ./pkg/... ./cmd/...
 # Success - no errors
 ```
@@ -212,7 +212,7 @@ go build ./api/... ./internal/... ./pkg/... ./cmd/...
 
 ### For Users
 
-None - CRD API remains unchanged. Existing NvidiaCarbideCluster and NvidiaCarbideMachine resources continue to work.
+None - CRD API remains unchanged. Existing NcxInfraCluster and NcxInfraMachine resources continue to work.
 
 ### For Developers
 
@@ -230,7 +230,7 @@ No migration needed - CRD API is unchanged.
 
 **Before:**
 ```go
-import "github.com/NVIDIA/cluster-api-provider-nvidia-carbide/pkg/cloud"
+import "github.com/NVIDIA/cluster-api-provider-nvidia-ncx-infra-controller/pkg/cloud"
 
 client := cloud.NewClient(endpoint, orgName, token)
 vpc, err := client.CreateVPC(ctx, req)
@@ -254,13 +254,13 @@ See `TESTING.md` for comprehensive testing guide using HTTP mock servers.
 ## Next Steps
 
 ### Phase 3: Extract Machine API Provider (Week 3)
-- Create `machine-api-provider-nvidia-carbide` repository
+- Create `machine-api-provider-nvidia-ncx-infra-controller` repository
 - Move `openshift/machine/` → new repo
 - Update to use generated client
 - Complete stub implementations
 
 ### Phase 4: Extract Cloud Provider (Week 4)
-- Create `cloud-provider-nvidia-carbide` repository
+- Create `cloud-provider-nvidia-ncx-infra-controller` repository
 - Move `openshift/cloudprovider/` → new repo (already using generated client)
 - Add deployment manifests
 

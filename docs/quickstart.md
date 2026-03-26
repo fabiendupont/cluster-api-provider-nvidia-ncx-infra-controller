@@ -1,15 +1,15 @@
 # Quickstart Guide
 
-This guide walks you through creating your first Kubernetes cluster on NVIDIA Carbide using Cluster API.
+This guide walks you through creating your first Kubernetes cluster on NVIDIA NCX Infra Controller using Cluster API.
 
 ## Prerequisites
 
 Before you begin, ensure you have:
 
 1. **Management Cluster** with Cluster API installed
-2. **NVIDIA Carbide API Credentials** (JWT token, org name, endpoint)
-3. **Instance Types** available in your NVIDIA Carbide site
-4. **SSH Key Groups** configured in NVIDIA Carbide
+2. **NVIDIA NCX Infra Controller API Credentials** (JWT token, org name, endpoint)
+3. **Instance Types** available in your NVIDIA NCX Infra Controller site
+4. **SSH Key Groups** configured in NVIDIA NCX Infra Controller
 
 ## Step 1: Install Cluster API
 
@@ -25,7 +25,7 @@ sudo mv clusterctl /usr/local/bin/
 clusterctl init
 ```
 
-## Step 2: Install NVIDIA Carbide Provider
+## Step 2: Install NVIDIA NCX Infra Controller Provider
 
 ### Option A: clusterctl
 
@@ -33,15 +33,15 @@ Add the provider to `~/.cluster-api/clusterctl.yaml`:
 
 ```yaml
 providers:
-  - name: nvidia-carbide
-    url: https://github.com/fabiendupont/cluster-api-provider-nvidia-carbide/releases/latest/infrastructure-components.yaml
+  - name: nvidia-ncx-infra-controller
+    url: https://github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/releases/latest/infrastructure-components.yaml
     type: InfrastructureProvider
 ```
 
 Install the provider:
 
 ```bash
-clusterctl init --infrastructure nvidia-carbide
+clusterctl init --infrastructure nvidia-ncx-infra-controller
 ```
 
 ### Option B: OLM (OpenShift)
@@ -53,24 +53,24 @@ kubectl apply -f - <<EOF
 apiVersion: operators.coreos.com/v1alpha1
 kind: CatalogSource
 metadata:
-  name: nvidia-carbide-catalog
+  name: nvidia-ncx-infra-controller-catalog
   namespace: openshift-marketplace
 spec:
   sourceType: grpc
-  image: ghcr.io/fabiendupont/cluster-api-provider-nvidia-carbide-catalog:v0.1.0
-  displayName: NVIDIA Carbide
+  image: ghcr.io/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller-catalog:v0.1.0
+  displayName: NVIDIA NCX Infra Controller
 EOF
 ```
 
-Then install **Cluster API Provider NVIDIA Carbide** from OperatorHub in the OpenShift console.
+Then install **Cluster API Provider NVIDIA NCX Infra Controller** from OperatorHub in the OpenShift console.
 
 ### Option C: Manual
 
 ```bash
-git clone https://github.com/fabiendupont/cluster-api-provider-nvidia-carbide
-cd cluster-api-provider-nvidia-carbide
+git clone https://github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller
+cd cluster-api-provider-nvidia-ncx-infra-controller
 
-export IMG=<your-registry>/cluster-api-provider-nvidia-carbide:v0.1.0
+export IMG=<your-registry>/cluster-api-provider-nvidia-ncx-infra-controller:v0.1.0
 make docker-build docker-push IMG=$IMG
 make install
 make deploy IMG=$IMG
@@ -79,15 +79,15 @@ make deploy IMG=$IMG
 Verify the controller is running:
 
 ```bash
-kubectl get pods -n cluster-api-provider-nvidia-carbide-system
+kubectl get pods -n cluster-api-provider-nvidia-ncx-infra-controller-system
 ```
 
 ## Step 3: Create Credentials Secret
 
-Create a secret with your NVIDIA Carbide API credentials:
+Create a secret with your NVIDIA NCX Infra Controller API credentials:
 
 ```bash
-kubectl create secret generic nvidia-carbide-credentials \
+kubectl create secret generic nvidia-ncx-infra-controller-credentials \
   --from-literal=endpoint="https://api.carbide.nvidia.com" \
   --from-literal=orgName="your-org-name" \
   --from-literal=token="your-jwt-token" \
@@ -96,7 +96,7 @@ kubectl create secret generic nvidia-carbide-credentials \
 
 ## Step 4: Get Site and Instance Information
 
-Find your Site name or UUID and available instance types through the NVIDIA Carbide API or UI. Note:
+Find your Site name or UUID and available instance types through the NVIDIA NCX Infra Controller API or UI. Note:
 
 - **Site name** (e.g., `my-site`)
 - **Tenant ID** (UUID)
@@ -111,14 +111,14 @@ Set the required environment variables and generate the cluster manifests:
 
 ```bash
 export CLUSTER_NAME="my-cluster"
-export NVIDIA_CARBIDE_SITE_NAME="my-site"
-export NVIDIA_CARBIDE_TENANT_ID="your-tenant-uuid"
-export NVIDIA_CARBIDE_CONTROL_PLANE_INSTANCE_TYPE_ID="instance-type-uuid"
-export NVIDIA_CARBIDE_WORKER_INSTANCE_TYPE_ID="instance-type-uuid"
-export NVIDIA_CARBIDE_SSH_KEY_GROUP_ID="ssh-key-group-uuid"
+export NCX_INFRA_SITE_NAME="my-site"
+export NCX_INFRA_TENANT_ID="your-tenant-uuid"
+export NCX_INFRA_CONTROL_PLANE_INSTANCE_TYPE_ID="instance-type-uuid"
+export NCX_INFRA_WORKER_INSTANCE_TYPE_ID="instance-type-uuid"
+export NCX_INFRA_SSH_KEY_GROUP_ID="ssh-key-group-uuid"
 
 clusterctl generate cluster my-cluster \
-  --infrastructure nvidia-carbide \
+  --infrastructure nvidia-ncx-infra-controller \
   --kubernetes-version v1.28.0 \
   --control-plane-machine-count 3 \
   --worker-machine-count 3 \
@@ -149,7 +149,7 @@ kubectl get clusters -w
 kubectl get machines -w
 
 # View detailed status
-kubectl describe nvidiacarbidecluster my-cluster
+kubectl describe ncxinfracluster my-cluster
 ```
 
 Bare-metal instance provisioning typically takes 5-15 minutes.
@@ -166,7 +166,7 @@ kubectl --kubeconfig=my-cluster.kubeconfig get nodes
 
 ## Step 8: Install Cloud Controller Manager
 
-For node lifecycle management, install the NVIDIA Carbide Cloud Controller Manager in the workload cluster. See [cloud-provider-nvidia-carbide](../../cloud-provider-nvidia-carbide/README.md) for instructions.
+For node lifecycle management, install the NVIDIA NCX Infra Controller Cloud Controller Manager in the workload cluster. See [cloud-provider-nvidia-ncx-infra-controller](../../cloud-provider-nvidia-ncx-infra-controller/README.md) for instructions.
 
 ## Step 9: Install CNI Plugin
 
@@ -198,16 +198,16 @@ kubectl patch kubeadmcontrolplane my-cluster-control-plane \
 kubectl delete cluster my-cluster
 ```
 
-This will deprovision all NVIDIA Carbide instances, delete subnets, NSG, VPC, and remove all cluster resources.
+This will deprovision all NVIDIA NCX Infra Controller instances, delete subnets, NSG, VPC, and remove all cluster resources.
 
 ## Troubleshooting
 
 ### Cluster stuck in Provisioning
 
 ```bash
-kubectl describe nvidiacarbidecluster my-cluster
-kubectl logs -n cluster-api-provider-nvidia-carbide-system \
-  deployment/cluster-api-provider-nvidia-carbide-controller-manager -f
+kubectl describe ncxinfracluster my-cluster
+kubectl logs -n cluster-api-provider-nvidia-ncx-infra-controller-system \
+  deployment/cluster-api-provider-nvidia-ncx-infra-controller-controller-manager -f
 ```
 
 ### Machines not provisioning
@@ -220,8 +220,8 @@ kubectl describe machine <machine-name>
 ### Network issues
 
 ```bash
-kubectl get nvidiacarbidecluster my-cluster -o jsonpath='{.status.vpcID}'
-kubectl get nvidiacarbidecluster my-cluster -o jsonpath='{.status.networkStatus}'
+kubectl get ncxinfracluster my-cluster -o jsonpath='{.status.vpcID}'
+kubectl get ncxinfracluster my-cluster -o jsonpath='{.status.networkStatus}'
 ```
 
 ## Common Configuration Patterns

@@ -29,33 +29,33 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-// +kubebuilder:webhook:path=/validate-infrastructure-cluster-x-k8s-io-v1beta1-nvidiacarbidecluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=infrastructure.cluster.x-k8s.io,resources=nvidiacarbideclusters,verbs=create;update,versions=v1beta1,name=vnvidiacarbidecluster.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-infrastructure-cluster-x-k8s-io-v1beta1-ncxinfracluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=infrastructure.cluster.x-k8s.io,resources=ncxinfraclusters,verbs=create;update,versions=v1beta1,name=vncxinfracluster.kb.io,admissionReviewVersions=v1
 
-var _ webhook.CustomValidator = &NvidiaCarbideCluster{}
+var _ webhook.CustomValidator = &NcxInfraCluster{}
 
-func (r *NvidiaCarbideCluster) SetupWebhookWithManager(mgr ctrl.Manager) error {
+func (r *NcxInfraCluster) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(r).
 		WithValidator(r).
 		Complete()
 }
 
-func (r *NvidiaCarbideCluster) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
-	cluster, ok := obj.(*NvidiaCarbideCluster)
+func (r *NcxInfraCluster) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
+	cluster, ok := obj.(*NcxInfraCluster)
 	if !ok {
-		return nil, fmt.Errorf("expected NvidiaCarbideCluster, got %T", obj)
+		return nil, fmt.Errorf("expected NcxInfraCluster, got %T", obj)
 	}
 	return nil, cluster.validateCluster().ToAggregate()
 }
 
-func (r *NvidiaCarbideCluster) ValidateUpdate(_ context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	oldCluster, ok := oldObj.(*NvidiaCarbideCluster)
+func (r *NcxInfraCluster) ValidateUpdate(_ context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
+	oldCluster, ok := oldObj.(*NcxInfraCluster)
 	if !ok {
-		return nil, fmt.Errorf("expected NvidiaCarbideCluster, got %T", oldObj)
+		return nil, fmt.Errorf("expected NcxInfraCluster, got %T", oldObj)
 	}
-	newCluster, ok := newObj.(*NvidiaCarbideCluster)
+	newCluster, ok := newObj.(*NcxInfraCluster)
 	if !ok {
-		return nil, fmt.Errorf("expected NvidiaCarbideCluster, got %T", newObj)
+		return nil, fmt.Errorf("expected NcxInfraCluster, got %T", newObj)
 	}
 
 	var allErrs field.ErrorList
@@ -69,11 +69,11 @@ func (r *NvidiaCarbideCluster) ValidateUpdate(_ context.Context, oldObj, newObj 
 	return nil, allErrs.ToAggregate()
 }
 
-func (r *NvidiaCarbideCluster) ValidateDelete(_ context.Context, _ runtime.Object) (admission.Warnings, error) {
+func (r *NcxInfraCluster) ValidateDelete(_ context.Context, _ runtime.Object) (admission.Warnings, error) {
 	return nil, nil
 }
 
-func (r *NvidiaCarbideCluster) validateCluster() field.ErrorList {
+func (r *NcxInfraCluster) validateCluster() field.ErrorList {
 	var allErrs field.ErrorList
 	specPath := field.NewPath("spec")
 
@@ -174,7 +174,7 @@ func (r *NvidiaCarbideCluster) validateCluster() field.ErrorList {
 	return nil
 }
 
-func (r *NvidiaCarbideCluster) validateImmutableFields(old *NvidiaCarbideCluster) field.ErrorList {
+func (r *NcxInfraCluster) validateImmutableFields(old *NcxInfraCluster) field.ErrorList {
 	var allErrs field.ErrorList
 	specPath := field.NewPath("spec")
 

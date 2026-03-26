@@ -4,7 +4,7 @@ apiVersion: cert-manager.io/v1
 kind: Issuer
 metadata:
   labels:
-    app.kubernetes.io/name: cluster-api-provider-nvidia-carbide
+    app.kubernetes.io/name: cluster-api-provider-nvidia-ncx-infra-controller
     app.kubernetes.io/managed-by: kustomize
   name: selfsigned-issuer
   namespace: system
@@ -15,7 +15,7 @@ apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   labels:
-    app.kubernetes.io/name: cluster-api-provider-nvidia-carbide
+    app.kubernetes.io/name: cluster-api-provider-nvidia-ncx-infra-controller
     app.kubernetes.io/managed-by: kustomize
   name: serving-cert  # this name should match the one appearing in kustomizeconfig.yaml
   namespace: system

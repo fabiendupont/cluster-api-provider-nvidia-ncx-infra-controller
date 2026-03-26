@@ -25,10 +25,10 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// NvidiaCarbideMachineSpec defines the desired state of NvidiaCarbideMachine
-type NvidiaCarbideMachineSpec struct {
+// NcxInfraMachineSpec defines the desired state of NcxInfraMachine
+type NcxInfraMachineSpec struct {
 	// ProviderID is the unique identifier for the machine instance
-	// Format: nvidia-carbide://org/tenant/site/instance-id
+	// Format: ncx-infra://org/tenant/site/instance-id
 	// +optional
 	ProviderID *string `json:"providerID,omitempty"`
 
@@ -164,6 +164,11 @@ type NetworkSpec struct {
 	// +optional
 	VPCPrefixName string `json:"vpcPrefixName,omitempty"`
 
+	// IpAddress explicitly requests a specific IP address for the primary interface.
+	// Cannot be used with Subnet-based interfaces. The least-significant host bit must be 1.
+	// +optional
+	IpAddress string `json:"ipAddress,omitempty"`
+
 	// AdditionalInterfaces for multi-NIC configurations
 	// +optional
 	AdditionalInterfaces []NetworkInterface `json:"additionalInterfaces,omitempty"`
@@ -181,13 +186,18 @@ type NetworkInterface struct {
 	// +optional
 	VPCPrefixName string `json:"vpcPrefixName,omitempty"`
 
+	// IpAddress explicitly requests a specific IP address for this interface.
+	// Cannot be used with Subnet-based interfaces. The least-significant host bit must be 1.
+	// +optional
+	IpAddress string `json:"ipAddress,omitempty"`
+
 	// IsPhysical indicates if this is a physical interface
 	// +optional
 	IsPhysical bool `json:"isPhysical,omitempty"`
 }
 
-// NvidiaCarbideMachineStatus defines the observed state of NvidiaCarbideMachine.
-type NvidiaCarbideMachineStatus struct {
+// NcxInfraMachineStatus defines the observed state of NcxInfraMachine.
+type NcxInfraMachineStatus struct {
 	// Ready indicates if the machine is ready and available
 	// +optional
 	Ready bool `json:"ready"`
@@ -206,7 +216,7 @@ type NvidiaCarbideMachineStatus struct {
 	InstanceState string `json:"instanceState,omitempty"`
 
 	// ProviderID is the unique identifier for the machine instance set by the provider
-	// Format: nvidia-carbide://org/tenant/site/instance-id
+	// Format: ncx-infra://org/tenant/site/instance-id
 	// +optional
 	ProviderID *string `json:"providerID,omitempty"`
 
@@ -226,50 +236,50 @@ type NvidiaCarbideMachineStatus struct {
 	// +optional
 	FailureMessage *string `json:"failureMessage,omitempty"`
 
-	// Conditions represent the current state of the NvidiaCarbideMachine
+	// Conditions represent the current state of the NcxInfraMachine
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // GetConditions returns the conditions from the status
-func (m *NvidiaCarbideMachine) GetConditions() []metav1.Condition {
+func (m *NcxInfraMachine) GetConditions() []metav1.Condition {
 	return m.Status.Conditions
 }
 
 // SetConditions sets the conditions in the status
-func (m *NvidiaCarbideMachine) SetConditions(conditions []metav1.Condition) {
+func (m *NcxInfraMachine) SetConditions(conditions []metav1.Condition) {
 	m.Status.Conditions = conditions
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
-// NvidiaCarbideMachine is the Schema for the nvidiacarbidemachines API
-type NvidiaCarbideMachine struct {
+// NcxInfraMachine is the Schema for the ncxinframachines API
+type NcxInfraMachine struct {
 	metav1.TypeMeta `json:",inline"`
 
 	// metadata is a standard object metadata
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitzero"`
 
-	// spec defines the desired state of NvidiaCarbideMachine
+	// spec defines the desired state of NcxInfraMachine
 	// +required
-	Spec NvidiaCarbideMachineSpec `json:"spec"`
+	Spec NcxInfraMachineSpec `json:"spec"`
 
-	// status defines the observed state of NvidiaCarbideMachine
+	// status defines the observed state of NcxInfraMachine
 	// +optional
-	Status NvidiaCarbideMachineStatus `json:"status,omitzero"`
+	Status NcxInfraMachineStatus `json:"status,omitzero"`
 }
 
 // +kubebuilder:object:root=true
 
-// NvidiaCarbideMachineList contains a list of NvidiaCarbideMachine
-type NvidiaCarbideMachineList struct {
+// NcxInfraMachineList contains a list of NcxInfraMachine
+type NcxInfraMachineList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitzero"`
-	Items           []NvidiaCarbideMachine `json:"items"`
+	Items           []NcxInfraMachine `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&NvidiaCarbideMachine{}, &NvidiaCarbideMachineList{})
+	SchemeBuilder.Register(&NcxInfraMachine{}, &NcxInfraMachineList{})
 }

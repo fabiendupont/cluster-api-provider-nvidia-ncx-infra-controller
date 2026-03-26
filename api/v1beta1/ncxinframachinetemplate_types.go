@@ -23,50 +23,50 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// NvidiaCarbideMachineTemplateSpec defines the desired state of NvidiaCarbideMachineTemplate
-type NvidiaCarbideMachineTemplateSpec struct {
-	// Template contains the NvidiaCarbideMachine template specification
+// NcxInfraMachineTemplateSpec defines the desired state of NcxInfraMachineTemplate
+type NcxInfraMachineTemplateSpec struct {
+	// Template contains the NcxInfraMachine template specification
 	// +required
-	Template NvidiaCarbideMachineTemplateResource `json:"template"`
+	Template NcxInfraMachineTemplateResource `json:"template"`
 }
 
-// NvidiaCarbideMachineTemplateResource describes the data needed to create a NvidiaCarbideMachine from a template
-type NvidiaCarbideMachineTemplateResource struct {
+// NcxInfraMachineTemplateResource describes the data needed to create a NcxInfraMachine from a template
+type NcxInfraMachineTemplateResource struct {
 	// Standard object's metadata
 	// +optional
 	ObjectMeta metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// Spec is the specification of the desired behavior of the machine
 	// +required
-	Spec NvidiaCarbideMachineSpec `json:"spec"`
+	Spec NcxInfraMachineSpec `json:"spec"`
 }
 
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:path=nvidiacarbidemachinetemplates,scope=Namespaced,categories=cluster-api
+// +kubebuilder:resource:path=ncxinframachinetemplates,scope=Namespaced,categories=cluster-api
 // +kubebuilder:storageversion
 
-// NvidiaCarbideMachineTemplate is the Schema for the nvidiacarbidemachinetemplates API
-type NvidiaCarbideMachineTemplate struct {
+// NcxInfraMachineTemplate is the Schema for the ncxinframachinetemplates API
+type NcxInfraMachineTemplate struct {
 	metav1.TypeMeta `json:",inline"`
 
 	// metadata is a standard object metadata
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitzero"`
 
-	// spec defines the desired state of NvidiaCarbideMachineTemplate
+	// spec defines the desired state of NcxInfraMachineTemplate
 	// +required
-	Spec NvidiaCarbideMachineTemplateSpec `json:"spec"`
+	Spec NcxInfraMachineTemplateSpec `json:"spec"`
 }
 
 // +kubebuilder:object:root=true
 
-// NvidiaCarbideMachineTemplateList contains a list of NvidiaCarbideMachineTemplate
-type NvidiaCarbideMachineTemplateList struct {
+// NcxInfraMachineTemplateList contains a list of NcxInfraMachineTemplate
+type NcxInfraMachineTemplateList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitzero"`
-	Items           []NvidiaCarbideMachineTemplate `json:"items"`
+	Items           []NcxInfraMachineTemplate `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&NvidiaCarbideMachineTemplate{}, &NvidiaCarbideMachineTemplateList{})
+	SchemeBuilder.Register(&NcxInfraMachineTemplate{}, &NcxInfraMachineTemplateList{})
 }

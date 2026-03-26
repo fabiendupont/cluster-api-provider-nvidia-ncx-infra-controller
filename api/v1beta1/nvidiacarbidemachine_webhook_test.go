@@ -23,10 +23,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func validMachine() *NvidiaCarbideMachine {
-	return &NvidiaCarbideMachine{
+func validMachine() *NcxInfraMachine {
+	return &NcxInfraMachine{
 		ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
-		Spec: NvidiaCarbideMachineSpec{
+		Spec: NcxInfraMachineSpec{
 			InstanceType: InstanceTypeSpec{
 				ID: "instance-type-uuid",
 			},

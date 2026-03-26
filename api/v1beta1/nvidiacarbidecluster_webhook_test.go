@@ -24,10 +24,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func validCluster() *NvidiaCarbideCluster {
-	return &NvidiaCarbideCluster{
+func validCluster() *NcxInfraCluster {
+	return &NcxInfraCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
-		Spec: NvidiaCarbideClusterSpec{
+		Spec: NcxInfraClusterSpec{
 			SiteRef:  SiteReference{ID: "site-uuid"},
 			TenantID: "tenant-uuid",
 			VPC: VPCSpec{

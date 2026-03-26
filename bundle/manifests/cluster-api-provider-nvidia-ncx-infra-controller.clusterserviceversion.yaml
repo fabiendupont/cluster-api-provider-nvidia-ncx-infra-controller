@@ -3,42 +3,44 @@ kind: ClusterServiceVersion
 metadata:
   annotations:
     alm-examples: '[]'
-  name: cluster-api-provider-nvidia-carbide.v0.1.0
+  name: cluster-api-provider-nvidia-ncx-infra-controller.v0.1.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
-      - description: NvidiaCarbideCluster is the Schema for the nvidiacarbideclusters API
-        displayName: NVIDIA Carbide Cluster
-        kind: NvidiaCarbideCluster
-        name: nvidiacarbideclusters.infrastructure.cluster.x-k8s.io
+      - description: NcxInfraCluster is the Schema for the ncxinfraclusters API
+        displayName: NVIDIA NCX Infra Cluster
+        kind: NcxInfraCluster
+        name: ncxinfraclusters.infrastructure.cluster.x-k8s.io
         version: v1beta1
-      - description: NvidiaCarbideMachine is the Schema for the nvidiacarbidemachines API
-        displayName: NVIDIA Carbide Machine
-        kind: NvidiaCarbideMachine
-        name: nvidiacarbidemachines.infrastructure.cluster.x-k8s.io
+      - description: NcxInfraMachine is the Schema for the ncxinframachines API
+        displayName: NVIDIA NCX Infra Machine
+        kind: NcxInfraMachine
+        name: ncxinframachines.infrastructure.cluster.x-k8s.io
         version: v1beta1
-      - description: NvidiaCarbideMachineTemplate is the Schema for the nvidiacarbidemachinetemplates API
-        displayName: NVIDIA Carbide Machine Template
-        kind: NvidiaCarbideMachineTemplate
-        name: nvidiacarbidemachinetemplates.infrastructure.cluster.x-k8s.io
+      - description: NcxInfraMachineTemplate is the Schema for the ncxinframachinetemplates API
+        displayName: NVIDIA NCX Infra Machine Template
+        kind: NcxInfraMachineTemplate
+        name: ncxinframachinetemplates.infrastructure.cluster.x-k8s.io
         version: v1beta1
   description: |
-    Cluster API infrastructure provider for NVIDIA Carbide bare-metal platform.
+    Cluster API infrastructure provider for the NVIDIA NCX Infra Controller
+    bare-metal platform.
 
     This operator enables declarative provisioning and lifecycle management of
-    Kubernetes clusters on NVIDIA Carbide infrastructure using the Cluster API
+    Kubernetes clusters on NVIDIA NCX infrastructure using the Cluster API
     standard.
 
     ## Features
 
-    - Declarative cluster infrastructure provisioning via NvidiaCarbideCluster
-    - Machine lifecycle management via NvidiaCarbideMachine
+    - Declarative cluster infrastructure provisioning via NcxInfraCluster
+    - Machine lifecycle management via NcxInfraMachine
     - Machine templates for control plane and worker node scaling
-    - VPC, subnet, and network security group automation
+    - VPC, subnet, network security group, and VPC peering automation
+    - Explicit IP address selection for network interfaces
     - Integration with Cluster API controllers for full cluster lifecycle
-  displayName: Cluster API Provider NVIDIA Carbide
+  displayName: Cluster API Provider NVIDIA NCX Infra Controller
   icon:
     - base64data: ""
       mediatype: image/svg+xml
@@ -74,8 +76,8 @@ spec:
             - apiGroups:
                 - infrastructure.cluster.x-k8s.io
               resources:
-                - nvidiacarbideclusters
-                - nvidiacarbidemachines
+                - ncxinfraclusters
+                - ncxinframachines
               verbs:
                 - create
                 - delete
@@ -87,38 +89,38 @@ spec:
             - apiGroups:
                 - infrastructure.cluster.x-k8s.io
               resources:
-                - nvidiacarbideclusters/finalizers
-                - nvidiacarbidemachines/finalizers
+                - ncxinfraclusters/finalizers
+                - ncxinframachines/finalizers
               verbs:
                 - update
             - apiGroups:
                 - infrastructure.cluster.x-k8s.io
               resources:
-                - nvidiacarbideclusters/status
-                - nvidiacarbidemachines/status
+                - ncxinfraclusters/status
+                - ncxinframachines/status
               verbs:
                 - get
                 - patch
                 - update
-          serviceAccountName: cluster-api-provider-nvidia-carbide-controller-manager
+          serviceAccountName: cluster-api-provider-nvidia-ncx-infra-controller-controller-manager
       deployments:
         - label:
             control-plane: controller-manager
-            app.kubernetes.io/name: cluster-api-provider-nvidia-carbide
-          name: cluster-api-provider-nvidia-carbide-controller-manager
+            app.kubernetes.io/name: cluster-api-provider-nvidia-ncx-infra-controller
+          name: cluster-api-provider-nvidia-ncx-infra-controller-controller-manager
           spec:
             replicas: 1
             selector:
               matchLabels:
                 control-plane: controller-manager
-                app.kubernetes.io/name: cluster-api-provider-nvidia-carbide
+                app.kubernetes.io/name: cluster-api-provider-nvidia-ncx-infra-controller
             template:
               metadata:
                 annotations:
                   kubectl.kubernetes.io/default-container: manager
                 labels:
                   control-plane: controller-manager
-                  app.kubernetes.io/name: cluster-api-provider-nvidia-carbide
+                  app.kubernetes.io/name: cluster-api-provider-nvidia-ncx-infra-controller
               spec:
                 containers:
                   - args:
@@ -126,7 +128,7 @@ spec:
                       - --health-probe-bind-address=:8081
                     command:
                       - /manager
-                    image: ghcr.io/fabiendupont/cluster-api-provider-nvidia-carbide:v0.1.0
+                    image: ghcr.io/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller:v0.1.0
                     livenessProbe:
                       httpGet:
                         path: /healthz
@@ -157,7 +159,7 @@ spec:
                   runAsNonRoot: true
                   seccompProfile:
                     type: RuntimeDefault
-                serviceAccountName: cluster-api-provider-nvidia-carbide-controller-manager
+                serviceAccountName: cluster-api-provider-nvidia-ncx-infra-controller-controller-manager
                 terminationGracePeriodSeconds: 10
       permissions:
         - rules:
@@ -192,7 +194,7 @@ spec:
               verbs:
                 - create
                 - patch
-          serviceAccountName: cluster-api-provider-nvidia-carbide-controller-manager
+          serviceAccountName: cluster-api-provider-nvidia-ncx-infra-controller-controller-manager
     strategy: deployment
   installModes:
     - supported: true
@@ -212,7 +214,7 @@ spec:
     - infrastructure
   links:
     - name: Source Code
-      url: https://github.com/fabiendupont/cluster-api-provider-nvidia-carbide
+      url: https://github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller
   maintainers:
     - email: fdupont@nvidia.com
       name: Fabien Dupont

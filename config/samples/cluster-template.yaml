@@ -3,7 +3,7 @@
 # This template demonstrates a complete CAPI cluster setup
 
 # Required: Create credentials secret first
-# kubectl create secret generic nvidia-carbide-credentials \
+# kubectl create secret generic ncx-infra-credentials \
 #   --from-literal=endpoint="https://api.carbide.nvidia.com" \
 #   --from-literal=orgName="your-org-name" \
 #   --from-literal=token="your-jwt-token" \
@@ -13,7 +13,7 @@
 apiVersion: cluster.x-k8s.io/v1beta2
 kind: Cluster
 metadata:
-  name: nvidia-carbide-cluster-example
+  name: ncx-infra-cluster-example
   namespace: default
 spec:
   clusterNetwork:
@@ -25,18 +25,18 @@ spec:
         - 10.96.0.0/12
   infrastructureRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-    kind: NvidiaCarbideCluster
-    name: nvidia-carbide-cluster-example
+    kind: NcxInfraCluster
+    name: ncx-infra-cluster-example
   controlPlaneRef:
     apiVersion: controlplane.cluster.x-k8s.io/v1beta1
     kind: KubeadmControlPlane
-    name: nvidia-carbide-cluster-example-control-plane
+    name: ncx-infra-cluster-example-control-plane
 
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-kind: NvidiaCarbideCluster
+kind: NcxInfraCluster
 metadata:
-  name: nvidia-carbide-cluster-example
+  name: ncx-infra-cluster-example
   namespace: default
 spec:
   # Reference to existing Site CRD (from carbide-rest/site-manager)
@@ -50,15 +50,15 @@ spec:
 
   # VPC configuration
   vpc:
-    name: "nvidia-carbide-cluster-example-vpc"
+    name: "ncx-infra-cluster-example-vpc"
     networkVirtualizationType: "ETHERNET_VIRTUALIZER"  # or "FNN"
     labels:
-      cluster: "nvidia-carbide-cluster-example"
+      cluster: "ncx-infra-cluster-example"
       environment: "production"
 
     # Optional: Network Security Group
     networkSecurityGroup:
-      name: "nvidia-carbide-cluster-example-nsg"
+      name: "ncx-infra-cluster-example-nsg"
       rules:
         - name: "allow-ssh"
           direction: "ingress"
@@ -94,14 +94,14 @@ spec:
   # Authentication credentials secret
   authentication:
     secretRef:
-      name: nvidia-carbide-credentials
+      name: ncx-infra-credentials
       namespace: default
 
 ---
 apiVersion: controlplane.cluster.x-k8s.io/v1beta1
 kind: KubeadmControlPlane
 metadata:
-  name: nvidia-carbide-cluster-example-control-plane
+  name: ncx-infra-cluster-example-control-plane
   namespace: default
 spec:
   replicas: 3
@@ -110,8 +110,8 @@ spec:
   machineTemplate:
     infrastructureRef:
       apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-      kind: NvidiaCarbideMachineTemplate
-      name: nvidia-carbide-cluster-example-control-plane
+      kind: NcxInfraMachineTemplate
+      name: ncx-infra-cluster-example-control-plane
 
   kubeadmConfigSpec:
     clusterConfiguration:
@@ -134,9 +134,9 @@ spec:
 
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-kind: NvidiaCarbideMachineTemplate
+kind: NcxInfraMachineTemplate
 metadata:
-  name: nvidia-carbide-cluster-example-control-plane
+  name: ncx-infra-cluster-example-control-plane
   namespace: default
 spec:
   template:
@@ -164,48 +164,48 @@ spec:
       # Labels for the instance
       labels:
         role: "control-plane"
-        cluster: "nvidia-carbide-cluster-example"
+        cluster: "ncx-infra-cluster-example"
 
 ---
 apiVersion: cluster.x-k8s.io/v1beta2
 kind: MachineDeployment
 metadata:
-  name: nvidia-carbide-cluster-example-workers
+  name: ncx-infra-cluster-example-workers
   namespace: default
 spec:
-  clusterName: nvidia-carbide-cluster-example
+  clusterName: ncx-infra-cluster-example
   replicas: 3
 
   selector:
     matchLabels:
-      cluster.x-k8s.io/cluster-name: nvidia-carbide-cluster-example
-      cluster.x-k8s.io/deployment-name: nvidia-carbide-cluster-example-workers
+      cluster.x-k8s.io/cluster-name: ncx-infra-cluster-example
+      cluster.x-k8s.io/deployment-name: ncx-infra-cluster-example-workers
 
   template:
     metadata:
       labels:
-        cluster.x-k8s.io/cluster-name: nvidia-carbide-cluster-example
-        cluster.x-k8s.io/deployment-name: nvidia-carbide-cluster-example-workers
+        cluster.x-k8s.io/cluster-name: ncx-infra-cluster-example
+        cluster.x-k8s.io/deployment-name: ncx-infra-cluster-example-workers
     spec:
-      clusterName: nvidia-carbide-cluster-example
+      clusterName: ncx-infra-cluster-example
       version: v1.28.0
 
       bootstrap:
         configRef:
           apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
           kind: KubeadmConfigTemplate
-          name: nvidia-carbide-cluster-example-worker
+          name: ncx-infra-cluster-example-worker
 
       infrastructureRef:
         apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-        kind: NvidiaCarbideMachineTemplate
-        name: nvidia-carbide-cluster-example-worker
+        kind: NcxInfraMachineTemplate
+        name: ncx-infra-cluster-example-worker
 
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-kind: NvidiaCarbideMachineTemplate
+kind: NcxInfraMachineTemplate
 metadata:
-  name: nvidia-carbide-cluster-example-worker
+  name: ncx-infra-cluster-example-worker
   namespace: default
 spec:
   template:
@@ -221,13 +221,13 @@ spec:
 
       labels:
         role: "worker"
-        cluster: "nvidia-carbide-cluster-example"
+        cluster: "ncx-infra-cluster-example"
 
 ---
 apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
 kind: KubeadmConfigTemplate
 metadata:
-  name: nvidia-carbide-cluster-example-worker
+  name: ncx-infra-cluster-example-worker
   namespace: default
 spec:
   template:

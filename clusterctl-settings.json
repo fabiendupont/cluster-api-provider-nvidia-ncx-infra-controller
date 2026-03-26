@@ -1,5 +1,5 @@
 {
-  "name": "infrastructure-nvidia-carbide",
+  "name": "infrastructure-nvidia-ncx-infra-controller",
   "config": {
     "componentsFile": "infrastructure-components.yaml",
     "nextVersion": "v0.1.0"

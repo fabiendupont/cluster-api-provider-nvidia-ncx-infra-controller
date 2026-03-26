@@ -39,8 +39,8 @@ rules:
 - apiGroups:
   - infrastructure.cluster.x-k8s.io
   resources:
-  - nvidiacarbideclusters
-  - nvidiacarbidemachines
+  - ncxinfraclusters
+  - ncxinframachines
   verbs:
   - create
   - delete
@@ -52,15 +52,15 @@ rules:
 - apiGroups:
   - infrastructure.cluster.x-k8s.io
   resources:
-  - nvidiacarbideclusters/finalizers
-  - nvidiacarbidemachines/finalizers
+  - ncxinfraclusters/finalizers
+  - ncxinframachines/finalizers
   verbs:
   - update
 - apiGroups:
   - infrastructure.cluster.x-k8s.io
   resources:
-  - nvidiacarbideclusters/status
-  - nvidiacarbidemachines/status
+  - ncxinfraclusters/status
+  - ncxinframachines/status
   verbs:
   - get
   - patch

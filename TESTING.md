@@ -5,19 +5,19 @@
 **Tests have been temporarily disabled** (renamed to `.disabled`) to allow the build to succeed after removing the old `pkg/cloud` package. The test files need to be updated to use the generated client from `github.com/NVIDIA/carbide-rest/client`.
 
 **Disabled Test Files:**
-- `internal/controller/nvidiacarbidecluster_controller_test.go.disabled`
-- `internal/controller/nvidiacarbidemachine_controller_test.go.disabled`
+- `internal/controller/ncxinfracluster_controller_test.go.disabled`
+- `internal/controller/ncxinframachine_controller_test.go.disabled`
 
 ## Test Files Requiring Updates
 
-### internal/controller/nvidiacarbidecluster_controller_test.go
+### internal/controller/ncxinfracluster_controller_test.go
 - **Status**: ❌ Needs migration
 - **Issues**:
   - Imports `pkg/cloud` and `pkg/cloud/mocks`
   - Uses old mock client interface
   - Test cases use old API types
 
-### internal/controller/nvidiacarbidemachine_controller_test.go
+### internal/controller/ncxinframachine_controller_test.go
 - **Status**: ❌ Needs migration (if exists)
 - **Issues**: Same as cluster controller tests
 
@@ -32,11 +32,11 @@ import (
     restclient "github.com/NVIDIA/carbide-rest/client"
 )
 
-type MockCarbideClient struct {
+type MockNcxInfraClient struct {
     mock.Mock
 }
 
-func (m *MockCarbideClient) CreateVpcWithResponse(ctx context.Context, org string, body restclient.CreateVpcJSONRequestBody, reqEditors ...restclient.RequestEditorFn) (*restclient.CreateVpcResponse, error) {
+func (m *MockNcxInfraClient) CreateVpcWithResponse(ctx context.Context, org string, body restclient.CreateVpcJSONRequestBody, reqEditors ...restclient.RequestEditorFn) (*restclient.CreateVpcResponse, error) {
     args := m.Called(ctx, org, body, reqEditors)
     if args.Get(0) == nil {
         return nil, args.Error(1)
@@ -48,7 +48,7 @@ func (m *MockCarbideClient) CreateVpcWithResponse(ctx context.Context, org strin
 ```
 
 ### Option 2: HTTP Test Server
-Use `httptest` to create a mock NVIDIA Carbide REST API server:
+Use `httptest` to create a mock NVIDIA NCX Infra Controller REST API server:
 
 ```go
 import (
@@ -87,7 +87,7 @@ func setupTestServer() *httptest.Server {
 Skip unit tests, focus on integration tests with envtest:
 
 ```go
-func TestNvidiaCarbideCluster_Integration(t *testing.T) {
+func TestNcxInfraCluster_Integration(t *testing.T) {
     // Setup envtest environment
     // Create test client pointing to mock server
     // Run full reconciliation
@@ -131,12 +131,12 @@ import (
     "k8s.io/utils/ptr"
 
     restclient "github.com/NVIDIA/carbide-rest/client"
-    infrastructurev1 "github.com/NVIDIA/cluster-api-provider-nvidia-carbide/api/v1beta1"
-    "github.com/NVIDIA/cluster-api-provider-nvidia-carbide/internal/controller"
-    "github.com/NVIDIA/cluster-api-provider-nvidia-carbide/pkg/scope"
+    infrastructurev1 "github.com/NVIDIA/cluster-api-provider-nvidia-ncx-infra-controller/api/v1beta1"
+    "github.com/NVIDIA/cluster-api-provider-nvidia-ncx-infra-controller/internal/controller"
+    "github.com/NVIDIA/cluster-api-provider-nvidia-ncx-infra-controller/pkg/scope"
 )
 
-func setupMockNvidiaCarbideAPI(t *testing.T) (*httptest.Server, *restclient.ClientWithResponses) {
+func setupMockNcxInfraAPI(t *testing.T) (*httptest.Server, *restclient.ClientWithResponses) {
     mux := http.NewServeMux()
 
     // VPC endpoints
@@ -216,24 +216,24 @@ func setupMockNvidiaCarbideAPI(t *testing.T) (*httptest.Server, *restclient.Clie
     return server, client
 }
 
-func TestNvidiaCarbideClusterController_ReconcileVPC(t *testing.T) {
-    server, nvidiaCarbideClient := setupMockNvidiaCarbideAPI(t)
+func TestNcxInfraClusterController_ReconcileVPC(t *testing.T) {
+    server, nvidiaCarbideClient := setupMockNcxInfraAPI(t)
     defer server.Close()
 
-    // Create test NvidiaCarbideCluster
-    nvidiaCarbideCluster := &infrastructurev1.NvidiaCarbideCluster{
+    // Create test NcxInfraCluster
+    nvidiaCarbideCluster := &infrastructurev1.NcxInfraCluster{
         // ... spec
     }
 
     // Create cluster scope with mock client
     clusterScope := &scope.ClusterScope{
-        NvidiaCarbideCluster: nvidiaCarbideCluster,
-        NvidiaCarbideClient:  nvidiaCarbideClient,
+        NcxInfraCluster: nvidiaCarbideCluster,
+        NcxInfraClient:  nvidiaCarbideClient,
         OrgName:        "test-org",
     }
 
     // Run reconciliation
-    reconciler := &controller.NvidiaCarbideClusterReconciler{
+    reconciler := &controller.NcxInfraClusterReconciler{
         // ... setup
     }
 
@@ -249,8 +249,8 @@ func TestNvidiaCarbideClusterController_ReconcileVPC(t *testing.T) {
    - `helpers/mock_server.go` - Shared mock API server
    - `helpers/fixtures.go` - Test data fixtures
 3. **Update controller tests**:
-   - `internal/controller/nvidiacarbidecluster_controller_test.go`
-   - `internal/controller/nvidiacarbidemachine_controller_test.go`
+   - `internal/controller/ncxinfracluster_controller_test.go`
+   - `internal/controller/ncxinframachine_controller_test.go`
 4. **Add integration tests**:
    - `test/integration/cluster_test.go`
    - `test/integration/machine_test.go`
