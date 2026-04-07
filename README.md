@@ -14,7 +14,7 @@ This project implements a Kubernetes Cluster API (CAPI) infrastructure provider 
 - **Network Virtualization**: Support for ETHERNET_VIRTUALIZER and FNN
 - **VPC Peering**: Cross-VPC network connectivity
 - **Explicit IP Selection**: Request specific IP addresses for VPC Prefix interfaces
-- **Provider ID**: `ncx-infra://org/tenant/site/instance-id` format for node correlation
+- **Provider ID**: `nico://org/tenant/site/instance-id` format for node correlation
 - **Bootstrap Integration**: Works with kubeadm and k3s bootstrap providers
 - **IP Block Auto-Management**: Automatic creation and management of IP blocks for subnet allocation (Kubernetes-native CIDR notation)
 - **Type-Safe API Client**: Auto-generated from OpenAPI 3.1 specification (zero maintenance)

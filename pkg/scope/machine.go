@@ -134,7 +134,7 @@ func (s *MachineScope) ProviderID() *providerid.ProviderID {
 }
 
 // SetProviderID sets the provider ID in both status and spec
-// Format: ncx-infra://<org>/<tenant>/<site>/<instance-id>
+// Format: nico://<org>/<tenant>/<site>/<instance-id>
 func (s *MachineScope) SetProviderID(tenantName, siteName, instanceIDStr string) error {
 	instanceUUID, err := uuid.Parse(instanceIDStr)
 	if err != nil {

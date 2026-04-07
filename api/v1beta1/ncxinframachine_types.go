@@ -28,7 +28,7 @@ import (
 // NcxInfraMachineSpec defines the desired state of NcxInfraMachine
 type NcxInfraMachineSpec struct {
 	// ProviderID is the unique identifier for the machine instance
-	// Format: ncx-infra://org/tenant/site/instance-id
+	// Format: nico://org/tenant/site/instance-id
 	// +optional
 	ProviderID *string `json:"providerID,omitempty"`
 
@@ -216,7 +216,7 @@ type NcxInfraMachineStatus struct {
 	InstanceState string `json:"instanceState,omitempty"`
 
 	// ProviderID is the unique identifier for the machine instance set by the provider
-	// Format: ncx-infra://org/tenant/site/instance-id
+	// Format: nico://org/tenant/site/instance-id
 	// +optional
 	ProviderID *string `json:"providerID,omitempty"`
 

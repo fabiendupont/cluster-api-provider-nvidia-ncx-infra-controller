@@ -23,10 +23,13 @@ import (
 	"github.com/google/uuid"
 )
 
-const ProviderPrefix = "ncx-infra://"
+const ProviderPrefix = "nico://"
+
+// LegacyProviderPrefix is the old scheme accepted on read for backward compatibility.
+const LegacyProviderPrefix = "ncx-infra://"
 
 // ProviderID represents a parsed NVIDIA Carbide provider ID.
-// Format: ncx-infra://org/tenant/site/instance-id
+// Format: nico://org/tenant/site/instance-id
 type ProviderID struct {
 	OrgName    string
 	TenantName string
@@ -50,19 +53,25 @@ func (p *ProviderID) String() string {
 }
 
 // ParseProviderID parses a provider ID string.
-// Supports both legacy 3-segment format (ncx-infra://org/site/id) and
-// new 4-segment format (ncx-infra://org/tenant/site/id).
+// Accepts both nico:// (current) and ncx-infra:// (legacy) prefixes.
+// Supports both legacy 3-segment format (scheme://org/site/id) and
+// new 4-segment format (scheme://org/tenant/site/id).
 func ParseProviderID(providerIDStr string) (*ProviderID, error) {
-	if !strings.HasPrefix(providerIDStr, ProviderPrefix) {
-		return nil, fmt.Errorf("invalid provider ID prefix, expected %q: %s", ProviderPrefix, providerIDStr)
+	var trimmed string
+	switch {
+	case strings.HasPrefix(providerIDStr, ProviderPrefix):
+		trimmed = strings.TrimPrefix(providerIDStr, ProviderPrefix)
+	case strings.HasPrefix(providerIDStr, LegacyProviderPrefix):
+		trimmed = strings.TrimPrefix(providerIDStr, LegacyProviderPrefix)
+	default:
+		return nil, fmt.Errorf("invalid provider ID prefix, expected %q or %q: %s", ProviderPrefix, LegacyProviderPrefix, providerIDStr)
 	}
 
-	trimmed := strings.TrimPrefix(providerIDStr, ProviderPrefix)
 	parts := strings.Split(trimmed, "/")
 
 	switch len(parts) {
 	case 3:
-		// Legacy format: ncx-infra://org/site/instance-id
+		// Legacy format: scheme://org/site/instance-id
 		instanceID, err := uuid.Parse(parts[2])
 		if err != nil {
 			return nil, fmt.Errorf("invalid instance ID %q: %w", parts[2], err)
@@ -74,7 +83,7 @@ func ParseProviderID(providerIDStr string) (*ProviderID, error) {
 			InstanceID: instanceID,
 		}, nil
 	case 4:
-		// New format: ncx-infra://org/tenant/site/instance-id
+		// Full format: scheme://org/tenant/site/instance-id
 		instanceID, err := uuid.Parse(parts[3])
 		if err != nil {
 			return nil, fmt.Errorf("invalid instance ID %q: %w", parts[3], err)

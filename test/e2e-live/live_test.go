@@ -248,7 +248,7 @@ var _ = Describe("Live NVIDIA Carbide Cluster E2E", Label("live"), func() {
 			By("Verifying machine has a provider ID")
 			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(nvidiaCarbideMachine), nvidiaCarbideMachine)).To(Succeed())
 			Expect(nvidiaCarbideMachine.Spec.ProviderID).NotTo(BeNil())
-			Expect(*nvidiaCarbideMachine.Spec.ProviderID).To(HavePrefix("ncx-infra://"))
+			Expect(*nvidiaCarbideMachine.Spec.ProviderID).To(HavePrefix("nico://"))
 
 			By("Deleting the machine")
 			Expect(k8sClient.Delete(ctx, machine)).To(Succeed())

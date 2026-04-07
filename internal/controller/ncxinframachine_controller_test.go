@@ -233,7 +233,7 @@ var _ = Describe("NcxInfraMachine Controller", func() {
 			Expect(updatedMachine.Status.InstanceID).To(Equal(instanceID))
 			Expect(updatedMachine.Status.MachineID).To(Equal(physMachineID))
 			Expect(updatedMachine.Status.ProviderID).NotTo(BeNil())
-			Expect(*updatedMachine.Status.ProviderID).To(ContainSubstring("ncx-infra://"))
+			Expect(*updatedMachine.Status.ProviderID).To(ContainSubstring("nico://"))
 			Expect(*updatedMachine.Status.ProviderID).To(ContainSubstring(instanceID))
 		})
 	})

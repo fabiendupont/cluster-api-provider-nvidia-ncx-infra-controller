@@ -198,7 +198,7 @@ spec:
               providerID:
                 description: |-
                   ProviderID is the unique identifier for the machine instance
-                  Format: ncx-infra://org/tenant/site/instance-id
+                  Format: nico://org/tenant/site/instance-id
                 type: string
               sshKeyGroups:
                 description: SSHKeyGroups contains SSH key group IDs for accessing
@@ -322,7 +322,7 @@ spec:
               providerID:
                 description: |-
                   ProviderID is the unique identifier for the machine instance set by the provider
-                  Format: ncx-infra://org/tenant/site/instance-id
+                  Format: nico://org/tenant/site/instance-id
                 type: string
               ready:
                 description: Ready indicates if the machine is ready and available

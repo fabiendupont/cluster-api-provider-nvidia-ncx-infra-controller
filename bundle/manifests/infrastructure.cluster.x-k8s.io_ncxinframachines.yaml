@@ -103,7 +103,7 @@ spec:
               providerID:
                 description: |-
                   ProviderID is the unique identifier for the machine instance
-                  Format: ncx-infra://org/tenant/site/instance-id
+                  Format: nico://org/tenant/site/instance-id
                 type: string
               sshKeyGroups:
                 description: SSHKeyGroups contains SSH key group IDs for accessing
