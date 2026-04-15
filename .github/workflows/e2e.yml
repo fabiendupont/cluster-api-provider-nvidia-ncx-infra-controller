@@ -23,7 +23,8 @@ jobs:
       - name: Checkout NVIDIA ncx-infra-controller-rest
         uses: actions/checkout@v4
         with:
-          repository: NVIDIA/ncx-infra-controller-rest
+          repository: fabiendupont/nvidia-ncx-infra-controller-rest
+          ref: extensible-architecture
           path: ncx-infra-controller-rest
 
       - name: Setup Go
@@ -86,20 +87,20 @@ jobs:
           make deploy IMG=$IMG
           kubectl wait --for=condition=Available deployment \
             -l control-plane=controller-manager \
-            -n cluster-api-provider-nvidia-ncx-infra-controller-system --timeout=5m || {
+            -n capi-ncx-infra-system --timeout=5m || {
             echo "=== Deployment status ==="
-            kubectl get deployment -n cluster-api-provider-nvidia-ncx-infra-controller-system -o wide
+            kubectl get deployment -n capi-ncx-infra-system -o wide
             echo "=== Pod status ==="
-            kubectl get pods -n cluster-api-provider-nvidia-ncx-infra-controller-system -o wide
+            kubectl get pods -n capi-ncx-infra-system -o wide
             echo "=== Pod describe ==="
-            kubectl describe pods -n cluster-api-provider-nvidia-ncx-infra-controller-system
+            kubectl describe pods -n capi-ncx-infra-system
             echo "=== Pod logs ==="
             kubectl logs -l control-plane=controller-manager \
-              -n cluster-api-provider-nvidia-ncx-infra-controller-system --tail=100 || true
+              -n capi-ncx-infra-system --tail=100 || true
             echo "=== Certificate status ==="
-            kubectl get certificate -n cluster-api-provider-nvidia-ncx-infra-controller-system -o wide
+            kubectl get certificate -n capi-ncx-infra-system -o wide
             echo "=== Secrets ==="
-            kubectl get secrets -n cluster-api-provider-nvidia-ncx-infra-controller-system
+            kubectl get secrets -n capi-ncx-infra-system
             exit 1
           }
 
@@ -108,6 +109,6 @@ jobs:
           make test-e2e-live || true
           echo "=== Controller logs ==="
           kubectl logs -l control-plane=controller-manager \
-            -n cluster-api-provider-nvidia-ncx-infra-controller-system --tail=200
+            -n capi-ncx-infra-system --tail=200
           # Re-run to get correct exit code
           make test-e2e-live

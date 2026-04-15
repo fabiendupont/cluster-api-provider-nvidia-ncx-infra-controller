@@ -265,8 +265,8 @@ cluster-api-provider-nvidia-ncx-infra-controller/
 ### Check Controller Logs
 
 ```bash
-kubectl logs -n cluster-api-provider-nvidia-ncx-infra-controller-system \
-  deployment/cluster-api-provider-nvidia-ncx-infra-controller-controller-manager
+kubectl logs -n capi-ncx-infra-system \
+  deployment/capi-ncx-infra-controller-manager
 ```
 
 ### Verify Cluster Status

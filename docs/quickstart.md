@@ -79,7 +79,7 @@ make deploy IMG=$IMG
 Verify the controller is running:
 
 ```bash
-kubectl get pods -n cluster-api-provider-nvidia-ncx-infra-controller-system
+kubectl get pods -n capi-ncx-infra-system
 ```
 
 ## Step 3: Create Credentials Secret
@@ -206,8 +206,8 @@ This will deprovision all NVIDIA NCX Infra Controller instances, delete subnets,
 
 ```bash
 kubectl describe ncxinfracluster my-cluster
-kubectl logs -n cluster-api-provider-nvidia-ncx-infra-controller-system \
-  deployment/cluster-api-provider-nvidia-ncx-infra-controller-controller-manager -f
+kubectl logs -n capi-ncx-infra-system \
+  deployment/capi-ncx-infra-controller-manager -f
 ```
 
 ### Machines not provisioning
