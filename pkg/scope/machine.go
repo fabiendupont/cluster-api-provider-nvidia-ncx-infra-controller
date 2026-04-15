@@ -31,25 +31,25 @@ import (
 
 // MachineScopeParams defines parameters for creating a machine scope
 type MachineScopeParams struct {
-	Client               client.Client
-	Cluster              *clusterv1.Cluster
-	Machine              *clusterv1.Machine
+	Client          client.Client
+	Cluster         *clusterv1.Cluster
+	Machine         *clusterv1.Machine
 	NcxInfraCluster *infrastructurev1.NcxInfraCluster
 	NcxInfraMachine *infrastructurev1.NcxInfraMachine
 	NcxInfraClient  NcxInfraClientInterface
-	OrgName              string // Organization name for API calls
+	OrgName         string // Organization name for API calls
 }
 
 // MachineScope defines the scope for machine operations
 type MachineScope struct {
 	client.Client
 
-	Cluster              *clusterv1.Cluster
-	Machine              *clusterv1.Machine
+	Cluster         *clusterv1.Cluster
+	Machine         *clusterv1.Machine
 	NcxInfraCluster *infrastructurev1.NcxInfraCluster
 	NcxInfraMachine *infrastructurev1.NcxInfraMachine
 	NcxInfraClient  NcxInfraClientInterface
-	OrgName              string // Organization name for API calls
+	OrgName         string // Organization name for API calls
 }
 
 // NewMachineScope creates a new machine scope
@@ -77,13 +77,13 @@ func NewMachineScope(params MachineScopeParams) (*MachineScope, error) {
 	}
 
 	return &MachineScope{
-		Client:               params.Client,
-		Cluster:              params.Cluster,
-		Machine:              params.Machine,
+		Client:          params.Client,
+		Cluster:         params.Cluster,
+		Machine:         params.Machine,
 		NcxInfraCluster: params.NcxInfraCluster,
 		NcxInfraMachine: params.NcxInfraMachine,
 		NcxInfraClient:  params.NcxInfraClient,
-		OrgName:              params.OrgName,
+		OrgName:         params.OrgName,
 	}, nil
 }
 

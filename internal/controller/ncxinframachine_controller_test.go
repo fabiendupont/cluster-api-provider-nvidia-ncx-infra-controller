@@ -31,10 +31,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	nico "github.com/NVIDIA/ncx-infra-controller-rest/sdk/standard"
 	infrastructurev1 "github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/api/v1beta1"
 	"github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/internal/controller/testutil"
 	"github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/pkg/scope"
-	nico "github.com/NVIDIA/ncx-infra-controller-rest/sdk/standard"
 )
 
 var _ = Describe("NcxInfraMachine Controller", func() {
@@ -216,10 +216,10 @@ var _ = Describe("NcxInfraMachine Controller", func() {
 				Build()
 
 			reconciler := &NcxInfraMachineReconciler{
-				Client:              k8sClient,
-				Scheme:              scheme,
+				Client:         k8sClient,
+				Scheme:         scheme,
 				NcxInfraClient: mockClient,
-				OrgName:             orgName,
+				OrgName:        orgName,
 			}
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: namespacedName})
@@ -275,10 +275,10 @@ var _ = Describe("NcxInfraMachine Controller", func() {
 				Build()
 
 			reconciler := &NcxInfraMachineReconciler{
-				Client:              k8sClient,
-				Scheme:              scheme,
+				Client:         k8sClient,
+				Scheme:         scheme,
 				NcxInfraClient: mockClient,
-				OrgName:             orgName,
+				OrgName:        orgName,
 			}
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: namespacedName})
@@ -326,10 +326,10 @@ var _ = Describe("NcxInfraMachine Controller", func() {
 				Build()
 
 			reconciler := &NcxInfraMachineReconciler{
-				Client:              k8sClient,
-				Scheme:              scheme,
+				Client:         k8sClient,
+				Scheme:         scheme,
 				NcxInfraClient: mockClient,
-				OrgName:             orgName,
+				OrgName:        orgName,
 			}
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: namespacedName})
@@ -353,11 +353,11 @@ var _ = Describe("NcxInfraMachine Controller", func() {
 
 			// Test reconcileDelete directly to avoid fake client issues with DeletionTimestamp
 			machineScope := &scope.MachineScope{
-				Cluster:              cluster,
-				Machine:              machine,
+				Cluster:         cluster,
+				Machine:         machine,
 				NcxInfraCluster: nvidiaCarbideCluster,
 				NcxInfraClient:  mockClient,
-				OrgName:              orgName,
+				OrgName:         orgName,
 				NcxInfraMachine: &infrastructurev1.NcxInfraMachine{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       machineName,
@@ -371,9 +371,9 @@ var _ = Describe("NcxInfraMachine Controller", func() {
 			}
 
 			reconciler := &NcxInfraMachineReconciler{
-				Scheme:              newTestScheme(),
+				Scheme:         newTestScheme(),
 				NcxInfraClient: mockClient,
-				OrgName:             orgName,
+				OrgName:        orgName,
 			}
 
 			result, err := reconciler.reconcileDelete(ctx, machineScope)
@@ -393,11 +393,11 @@ var _ = Describe("NcxInfraMachine Controller", func() {
 			}
 
 			machineScope := &scope.MachineScope{
-				Cluster:              cluster,
-				Machine:              machine,
+				Cluster:         cluster,
+				Machine:         machine,
 				NcxInfraCluster: nvidiaCarbideCluster,
 				NcxInfraClient:  mockClient,
-				OrgName:              orgName,
+				OrgName:         orgName,
 				NcxInfraMachine: &infrastructurev1.NcxInfraMachine{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       machineName,
@@ -411,9 +411,9 @@ var _ = Describe("NcxInfraMachine Controller", func() {
 			}
 
 			reconciler := &NcxInfraMachineReconciler{
-				Scheme:              newTestScheme(),
+				Scheme:         newTestScheme(),
 				NcxInfraClient: mockClient,
-				OrgName:             orgName,
+				OrgName:        orgName,
 			}
 
 			result, err := reconciler.reconcileDelete(ctx, machineScope)
@@ -497,10 +497,10 @@ var _ = Describe("NcxInfraMachine Controller", func() {
 				Build()
 
 			reconciler := &NcxInfraMachineReconciler{
-				Client:              k8sClient,
-				Scheme:              scheme,
+				Client:         k8sClient,
+				Scheme:         scheme,
 				NcxInfraClient: mockClient,
-				OrgName:             orgName,
+				OrgName:        orgName,
 			}
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: namespacedName})
@@ -512,6 +512,342 @@ var _ = Describe("NcxInfraMachine Controller", func() {
 			Expect(k8sClient.Get(ctx, namespacedName, updatedMachine)).To(Succeed())
 			Expect(updatedMachine.Status.InstanceID).To(Equal(existingInstanceID))
 			Expect(updatedMachine.Status.Ready).To(BeTrue())
+		})
+	})
+
+	Context("When instance is in Error state with fault events", func() {
+		It("should enrich FailureMessage with fault event details", func() {
+			instanceID := uuid.New().String()
+			physMachineID := uuid.New().String()
+			status := nico.InstanceStatus("Error")
+
+			mockClient := &testutil.MockNcxInfraClient{
+				GetInstanceFunc: func(ctx context.Context, org, id string) (*nico.Instance, *http.Response, error) {
+					return &nico.Instance{
+						Id:        &instanceID,
+						Name:      testutil.Ptr(machineName),
+						MachineId: *nico.NewNullableString(&physMachineID),
+						Status:    &status,
+					}, testutil.MockHTTPResponse(200), nil
+				},
+				GetSiteFunc: func(ctx context.Context, org, id string) (*nico.Site, *http.Response, error) {
+					return &nico.Site{
+						Id:           testutil.Ptr(siteID),
+						Capabilities: &nico.SiteCapabilities{FaultManagement: testutil.Ptr(true)},
+					}, testutil.MockHTTPResponse(200), nil
+				},
+				ListFaultEventsFunc: func(ctx context.Context, org, machineId, state, severity string) ([]nico.FaultEvent, *http.Response, error) {
+					Expect(machineId).To(Equal(physMachineID))
+					Expect(state).To(Equal("open"))
+					Expect(severity).To(Equal("critical"))
+					return []nico.FaultEvent{
+						{
+							MachineId:      &physMachineID,
+							Classification: testutil.Ptr("gpu-xid-48"),
+							Message:        testutil.Ptr("GPU memory error detected"),
+							State:          testutil.Ptr("open"),
+							Severity:       testutil.Ptr("critical"),
+						},
+					}, testutil.MockHTTPResponse(200), nil
+				},
+			}
+
+			nvidiaCarbideMachine.Finalizers = []string{NcxInfraMachineFinalizer}
+			nvidiaCarbideMachine.Status = infrastructurev1.NcxInfraMachineStatus{
+				InstanceID: instanceID,
+				MachineID:  physMachineID,
+			}
+
+			scheme := newTestScheme()
+			k8sClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(cluster, machine, nvidiaCarbideCluster, nvidiaCarbideMachine, credsSecret, bootstrapSecret).
+				WithStatusSubresource(
+					&infrastructurev1.NcxInfraMachine{},
+					&infrastructurev1.NcxInfraCluster{},
+					&clusterv1.Machine{},
+				).
+				Build()
+
+			reconciler := &NcxInfraMachineReconciler{
+				Client:         k8sClient,
+				Scheme:         scheme,
+				NcxInfraClient: mockClient,
+				OrgName:        orgName,
+			}
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: namespacedName})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.RequeueAfter).NotTo(BeZero())
+
+			updatedMachine := &infrastructurev1.NcxInfraMachine{}
+			Expect(k8sClient.Get(ctx, namespacedName, updatedMachine)).To(Succeed())
+			Expect(updatedMachine.Status.FailureMessage).NotTo(BeNil())
+			Expect(*updatedMachine.Status.FailureMessage).To(ContainSubstring("gpu-xid-48"))
+			Expect(*updatedMachine.Status.FailureMessage).To(ContainSubstring("GPU memory error detected"))
+		})
+	})
+
+	Context("When instance is ready with healthy machine", func() {
+		It("should set NicoHealthy condition to True", func() {
+			instanceID := uuid.New().String()
+			physMachineID := uuid.New().String()
+			status := nico.InstanceStatus("Ready")
+
+			mockClient := &testutil.MockNcxInfraClient{
+				GetInstanceFunc: func(ctx context.Context, org, id string) (*nico.Instance, *http.Response, error) {
+					return &nico.Instance{
+						Id:        &instanceID,
+						Name:      testutil.Ptr(machineName),
+						MachineId: *nico.NewNullableString(&physMachineID),
+						Status:    &status,
+						Interfaces: []nico.Interface{
+							{IpAddresses: []string{"10.0.1.10"}},
+						},
+					}, testutil.MockHTTPResponse(200), nil
+				},
+				GetSiteFunc: func(ctx context.Context, org, id string) (*nico.Site, *http.Response, error) {
+					return &nico.Site{
+						Id:           testutil.Ptr(siteID),
+						Capabilities: &nico.SiteCapabilities{FaultManagement: testutil.Ptr(true)},
+					}, testutil.MockHTTPResponse(200), nil
+				},
+				ListFaultEventsFunc: func(ctx context.Context, org, machineId, state, severity string) ([]nico.FaultEvent, *http.Response, error) {
+					return []nico.FaultEvent{}, testutil.MockHTTPResponse(200), nil
+				},
+			}
+
+			nvidiaCarbideMachine.Finalizers = []string{NcxInfraMachineFinalizer}
+			nvidiaCarbideMachine.Status = infrastructurev1.NcxInfraMachineStatus{
+				InstanceID: instanceID,
+				MachineID:  physMachineID,
+			}
+
+			scheme := newTestScheme()
+			k8sClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(cluster, machine, nvidiaCarbideCluster, nvidiaCarbideMachine, credsSecret, bootstrapSecret).
+				WithStatusSubresource(
+					&infrastructurev1.NcxInfraMachine{},
+					&infrastructurev1.NcxInfraCluster{},
+					&clusterv1.Machine{},
+				).
+				Build()
+
+			reconciler := &NcxInfraMachineReconciler{
+				Client:         k8sClient,
+				Scheme:         scheme,
+				NcxInfraClient: mockClient,
+				OrgName:        orgName,
+			}
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: namespacedName})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.RequeueAfter).To(BeZero())
+
+			updatedMachine := &infrastructurev1.NcxInfraMachine{}
+			Expect(k8sClient.Get(ctx, namespacedName, updatedMachine)).To(Succeed())
+			Expect(updatedMachine.Status.Ready).To(BeTrue())
+
+			// Check NicoHealthy condition
+			var healthyCond *metav1.Condition
+			for i := range updatedMachine.Status.Conditions {
+				if updatedMachine.Status.Conditions[i].Type == string(NicoHealthyCondition) {
+					healthyCond = &updatedMachine.Status.Conditions[i]
+					break
+				}
+			}
+			Expect(healthyCond).NotTo(BeNil())
+			Expect(healthyCond.Status).To(Equal(metav1.ConditionTrue))
+		})
+	})
+
+	Context("When instance targets an unhealthy machine", func() {
+		It("should block creation with pre-flight health check", func() {
+			targetMachineID := uuid.New().String()
+
+			mockClient := &testutil.MockNcxInfraClient{
+				GetAllInstanceFunc: func(ctx context.Context, org string) ([]nico.Instance, *http.Response, error) {
+					return []nico.Instance{}, testutil.MockHTTPResponse(200), nil
+				},
+				GetSiteFunc: func(ctx context.Context, org, id string) (*nico.Site, *http.Response, error) {
+					return &nico.Site{
+						Id:           testutil.Ptr(siteID),
+						Capabilities: &nico.SiteCapabilities{FaultManagement: testutil.Ptr(true)},
+					}, testutil.MockHTTPResponse(200), nil
+				},
+				ListFaultEventsFunc: func(ctx context.Context, org, machineId, state, severity string) ([]nico.FaultEvent, *http.Response, error) {
+					return []nico.FaultEvent{
+						{
+							MachineId:      &targetMachineID,
+							Classification: testutil.Ptr("gpu-xid-48"),
+							Message:        testutil.Ptr("GPU fault detected"),
+							State:          testutil.Ptr("open"),
+							Severity:       testutil.Ptr("critical"),
+						},
+					}, testutil.MockHTTPResponse(200), nil
+				},
+			}
+
+			nvidiaCarbideMachine.Finalizers = []string{NcxInfraMachineFinalizer}
+			nvidiaCarbideMachine.Spec.InstanceType = infrastructurev1.InstanceTypeSpec{
+				MachineID: targetMachineID,
+			}
+
+			scheme := newTestScheme()
+			k8sClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(cluster, machine, nvidiaCarbideCluster, nvidiaCarbideMachine, credsSecret, bootstrapSecret).
+				WithStatusSubresource(
+					&infrastructurev1.NcxInfraMachine{},
+					&infrastructurev1.NcxInfraCluster{},
+					&clusterv1.Machine{},
+				).
+				Build()
+
+			reconciler := &NcxInfraMachineReconciler{
+				Client:         k8sClient,
+				Scheme:         scheme,
+				NcxInfraClient: mockClient,
+				OrgName:        orgName,
+			}
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: namespacedName})
+			Expect(err).NotTo(HaveOccurred())
+			// Should requeue with backoff, not return a hard error
+			Expect(result.RequeueAfter).NotTo(BeZero())
+		})
+
+		It("should allow creation when AllowUnhealthyMachine is set", func() {
+			targetMachineID := uuid.New().String()
+			instanceID := uuid.New().String()
+			status := nico.InstanceStatus("Provisioning")
+
+			mockClient := &testutil.MockNcxInfraClient{
+				GetAllInstanceFunc: func(ctx context.Context, org string) ([]nico.Instance, *http.Response, error) {
+					return []nico.Instance{}, testutil.MockHTTPResponse(200), nil
+				},
+				CreateInstanceFunc: func(ctx context.Context, org string, req nico.InstanceCreateRequest) (*nico.Instance, *http.Response, error) {
+					return &nico.Instance{
+						Id:        &instanceID,
+						Name:      testutil.Ptr(machineName),
+						MachineId: *nico.NewNullableString(&targetMachineID),
+						Status:    &status,
+					}, testutil.MockHTTPResponse(201), nil
+				},
+			}
+
+			nvidiaCarbideMachine.Finalizers = []string{NcxInfraMachineFinalizer}
+			nvidiaCarbideMachine.Spec.InstanceType = infrastructurev1.InstanceTypeSpec{
+				MachineID:             targetMachineID,
+				AllowUnhealthyMachine: true,
+			}
+
+			scheme := newTestScheme()
+			k8sClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(cluster, machine, nvidiaCarbideCluster, nvidiaCarbideMachine, credsSecret, bootstrapSecret).
+				WithStatusSubresource(
+					&infrastructurev1.NcxInfraMachine{},
+					&infrastructurev1.NcxInfraCluster{},
+					&clusterv1.Machine{},
+				).
+				Build()
+
+			reconciler := &NcxInfraMachineReconciler{
+				Client:         k8sClient,
+				Scheme:         scheme,
+				NcxInfraClient: mockClient,
+				OrgName:        orgName,
+			}
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: namespacedName})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.RequeueAfter).NotTo(BeZero())
+
+			updatedMachine := &infrastructurev1.NcxInfraMachine{}
+			Expect(k8sClient.Get(ctx, namespacedName, updatedMachine)).To(Succeed())
+			Expect(updatedMachine.Status.InstanceID).To(Equal(instanceID))
+		})
+	})
+
+	Context("When API returns transient errors", func() {
+		It("should requeue on 503 from GetInstance", func() {
+			instanceID := uuid.New().String()
+
+			mockClient := &testutil.MockNcxInfraClient{
+				GetInstanceFunc: func(ctx context.Context, org, id string) (*nico.Instance, *http.Response, error) {
+					return nil, testutil.MockHTTPResponse(503), fmt.Errorf("service unavailable")
+				},
+			}
+
+			nvidiaCarbideMachine.Finalizers = []string{NcxInfraMachineFinalizer}
+			nvidiaCarbideMachine.Status = infrastructurev1.NcxInfraMachineStatus{
+				InstanceID: instanceID,
+			}
+
+			scheme := newTestScheme()
+			k8sClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(cluster, machine, nvidiaCarbideCluster, nvidiaCarbideMachine, credsSecret, bootstrapSecret).
+				WithStatusSubresource(
+					&infrastructurev1.NcxInfraMachine{},
+					&infrastructurev1.NcxInfraCluster{},
+					&clusterv1.Machine{},
+				).
+				Build()
+
+			reconciler := &NcxInfraMachineReconciler{
+				Client:         k8sClient,
+				Scheme:         scheme,
+				NcxInfraClient: mockClient,
+				OrgName:        orgName,
+			}
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: namespacedName})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.RequeueAfter).NotTo(BeZero())
+		})
+
+		It("should handle 404 from GetInstance as instance gone", func() {
+			instanceID := uuid.New().String()
+
+			mockClient := &testutil.MockNcxInfraClient{
+				GetInstanceFunc: func(ctx context.Context, org, id string) (*nico.Instance, *http.Response, error) {
+					return nil, testutil.MockHTTPResponse(404), fmt.Errorf("not found")
+				},
+			}
+
+			nvidiaCarbideMachine.Finalizers = []string{NcxInfraMachineFinalizer}
+			nvidiaCarbideMachine.Status = infrastructurev1.NcxInfraMachineStatus{
+				InstanceID: instanceID,
+			}
+
+			scheme := newTestScheme()
+			k8sClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(cluster, machine, nvidiaCarbideCluster, nvidiaCarbideMachine, credsSecret, bootstrapSecret).
+				WithStatusSubresource(
+					&infrastructurev1.NcxInfraMachine{},
+					&infrastructurev1.NcxInfraCluster{},
+					&clusterv1.Machine{},
+				).
+				Build()
+
+			reconciler := &NcxInfraMachineReconciler{
+				Client:         k8sClient,
+				Scheme:         scheme,
+				NcxInfraClient: mockClient,
+				OrgName:        orgName,
+			}
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: namespacedName})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.RequeueAfter).To(BeZero())
+
+			updatedMachine := &infrastructurev1.NcxInfraMachine{}
+			Expect(k8sClient.Get(ctx, namespacedName, updatedMachine)).To(Succeed())
+			Expect(updatedMachine.Status.FailureReason).NotTo(BeNil())
 		})
 	})
 })

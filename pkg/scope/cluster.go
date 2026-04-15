@@ -27,8 +27,8 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	infrastructurev1 "github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/api/v1beta1"
 	nico "github.com/NVIDIA/ncx-infra-controller-rest/sdk/standard"
+	infrastructurev1 "github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/api/v1beta1"
 )
 
 // NcxInfraClientInterface defines the methods we need from the NVIDIA Carbide REST client
@@ -96,6 +96,14 @@ type NcxInfraClientInterface interface {
 	BatchCreateInstance(
 		ctx context.Context, org string, req nico.BatchInstanceCreateRequest,
 	) ([]nico.Instance, *http.Response, error)
+
+	// Machine (physical)
+	GetMachine(ctx context.Context, org string, machineId string) (*nico.Machine, *http.Response, error)
+
+	// Health / Fault events
+	ListFaultEvents(
+		ctx context.Context, org string, machineId string, state string, severity string,
+	) ([]nico.FaultEvent, *http.Response, error)
 
 	// VPC Prefix
 	CreateVpcPrefix(
@@ -256,6 +264,28 @@ func (c *ncxInfraClient) BatchCreateInstance(
 	return c.client.InstanceAPI.BatchCreateInstance(c.authCtx(ctx), org).BatchInstanceCreateRequest(req).Execute()
 }
 
+// Machine methods
+func (c *ncxInfraClient) GetMachine(ctx context.Context, org, machineId string) (*nico.Machine, *http.Response, error) {
+	return c.client.MachineAPI.GetMachine(c.authCtx(ctx), org, machineId).Execute()
+}
+
+// Health / Fault event methods
+func (c *ncxInfraClient) ListFaultEvents(
+	ctx context.Context, org, machineId, state, severity string,
+) ([]nico.FaultEvent, *http.Response, error) {
+	req := c.client.HealthAPI.ListFaultEvents(c.authCtx(ctx), org)
+	if machineId != "" {
+		req = req.MachineId(machineId)
+	}
+	if state != "" {
+		req = req.State(state)
+	}
+	if severity != "" {
+		req = req.Severity(severity)
+	}
+	return req.Execute()
+}
+
 // VPC Prefix methods
 func (c *ncxInfraClient) CreateVpcPrefix(
 	ctx context.Context, org string, req nico.VpcPrefixCreateRequest,
@@ -288,21 +318,21 @@ func (c *ncxInfraClient) DeleteVpcPeering(ctx context.Context, org, peeringId st
 
 // ClusterScopeParams defines parameters for creating a cluster scope
 type ClusterScopeParams struct {
-	Client               client.Client
-	Cluster              *clusterv1.Cluster
+	Client          client.Client
+	Cluster         *clusterv1.Cluster
 	NcxInfraCluster *infrastructurev1.NcxInfraCluster
 	NcxInfraClient  NcxInfraClientInterface // Optional: skip creating new client
-	OrgName              string                       // Optional: org name
+	OrgName         string                  // Optional: org name
 }
 
 // ClusterScope defines the scope for cluster operations
 type ClusterScope struct {
 	client.Client
 
-	Cluster              *clusterv1.Cluster
+	Cluster         *clusterv1.Cluster
 	NcxInfraCluster *infrastructurev1.NcxInfraCluster
 	NcxInfraClient  NcxInfraClientInterface
-	OrgName              string // Organization name for API calls
+	OrgName         string // Organization name for API calls
 }
 
 // NewClusterScope creates a new cluster scope
@@ -372,11 +402,11 @@ func NewClusterScope(ctx context.Context, params ClusterScopeParams) (*ClusterSc
 	}
 
 	return &ClusterScope{
-		Client:               params.Client,
-		Cluster:              params.Cluster,
+		Client:          params.Client,
+		Cluster:         params.Cluster,
 		NcxInfraCluster: params.NcxInfraCluster,
 		NcxInfraClient:  nvidiaCarbideClient,
-		OrgName:              orgName,
+		OrgName:         orgName,
 	}, nil
 }
 

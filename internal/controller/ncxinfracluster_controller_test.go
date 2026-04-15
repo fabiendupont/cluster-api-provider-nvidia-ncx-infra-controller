@@ -32,10 +32,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	nico "github.com/NVIDIA/ncx-infra-controller-rest/sdk/standard"
 	infrastructurev1 "github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/api/v1beta1"
 	"github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/internal/controller/testutil"
 	"github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/pkg/scope"
-	nico "github.com/NVIDIA/ncx-infra-controller-rest/sdk/standard"
 )
 
 func newTestScheme() *runtime.Scheme {
@@ -184,10 +184,10 @@ var _ = Describe("NcxInfraCluster Controller", func() {
 				Build()
 
 			reconciler := &NcxInfraClusterReconciler{
-				Client:              k8sClient,
-				Scheme:              scheme,
+				Client:         k8sClient,
+				Scheme:         scheme,
 				NcxInfraClient: mockClient,
-				OrgName:             orgName,
+				OrgName:        orgName,
 			}
 
 			// First reconcile — should add finalizer
@@ -262,10 +262,10 @@ var _ = Describe("NcxInfraCluster Controller", func() {
 				Build()
 
 			reconciler := &NcxInfraClusterReconciler{
-				Client:              k8sClient,
-				Scheme:              scheme,
+				Client:         k8sClient,
+				Scheme:         scheme,
 				NcxInfraClient: mockClient,
-				OrgName:             orgName,
+				OrgName:        orgName,
 			}
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: namespacedName})
@@ -321,10 +321,10 @@ var _ = Describe("NcxInfraCluster Controller", func() {
 				Build()
 
 			reconciler := &NcxInfraClusterReconciler{
-				Client:              k8sClient,
-				Scheme:              scheme,
+				Client:         k8sClient,
+				Scheme:         scheme,
 				NcxInfraClient: mockClient,
-				OrgName:             orgName,
+				OrgName:        orgName,
 			}
 
 			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: namespacedName})
@@ -386,10 +386,10 @@ var _ = Describe("NcxInfraCluster Controller", func() {
 				Build()
 
 			reconciler := &NcxInfraClusterReconciler{
-				Client:              k8sClient,
-				Scheme:              scheme,
+				Client:         k8sClient,
+				Scheme:         scheme,
 				NcxInfraClient: mockClient,
-				OrgName:             orgName,
+				OrgName:        orgName,
 			}
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: namespacedName})
@@ -450,10 +450,10 @@ var _ = Describe("NcxInfraCluster Controller", func() {
 			// Test reconcileDelete directly via the scope to avoid fake client
 			// issues with DeletionTimestamp objects
 			clusterScope := &scope.ClusterScope{
-				Client:              nil,
-				Cluster:             cluster,
+				Client:         nil,
+				Cluster:        cluster,
 				NcxInfraClient: mockClient,
-				OrgName:             orgName,
+				OrgName:        orgName,
 				NcxInfraCluster: &infrastructurev1.NcxInfraCluster{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       clusterName,
@@ -474,9 +474,9 @@ var _ = Describe("NcxInfraCluster Controller", func() {
 			}
 
 			reconciler := &NcxInfraClusterReconciler{
-				Scheme:              scheme,
+				Scheme:         scheme,
 				NcxInfraClient: mockClient,
-				OrgName:             orgName,
+				OrgName:        orgName,
 			}
 
 			result, err := reconciler.reconcileDelete(ctx, clusterScope)
@@ -502,10 +502,10 @@ var _ = Describe("NcxInfraCluster Controller", func() {
 			}
 
 			clusterScope := &scope.ClusterScope{
-				Client:              nil,
-				Cluster:             cluster,
+				Client:         nil,
+				Cluster:        cluster,
 				NcxInfraClient: mockClient,
-				OrgName:             orgName,
+				OrgName:        orgName,
 				NcxInfraCluster: &infrastructurev1.NcxInfraCluster{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       clusterName,
@@ -519,9 +519,9 @@ var _ = Describe("NcxInfraCluster Controller", func() {
 			}
 
 			reconciler := &NcxInfraClusterReconciler{
-				Scheme:              scheme,
+				Scheme:         scheme,
 				NcxInfraClient: mockClient,
-				OrgName:             orgName,
+				OrgName:        orgName,
 			}
 
 			result, err := reconciler.reconcileDelete(ctx, clusterScope)
@@ -609,10 +609,10 @@ var _ = Describe("NcxInfraCluster Controller", func() {
 				Build()
 
 			reconciler := &NcxInfraClusterReconciler{
-				Client:              k8sClient,
-				Scheme:              scheme,
+				Client:         k8sClient,
+				Scheme:         scheme,
 				NcxInfraClient: mockClient,
-				OrgName:             orgName,
+				OrgName:        orgName,
 			}
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: namespacedName})

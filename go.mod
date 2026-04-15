@@ -2,6 +2,8 @@ module github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller
 
 go 1.25.4
 
+replace github.com/NVIDIA/ncx-infra-controller-rest => github.com/fabiendupont/nvidia-ncx-infra-controller-rest v0.0.0-20260414175945-c65af50d4ad5
+
 require (
 	github.com/NVIDIA/ncx-infra-controller-rest v1.2.0
 	github.com/google/uuid v1.6.0

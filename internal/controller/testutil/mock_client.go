@@ -128,6 +128,16 @@ type MockNcxInfraClient struct {
 		ctx context.Context, org string, req nico.BatchInstanceCreateRequest,
 	) ([]nico.Instance, *http.Response, error)
 
+	// Machine (physical)
+	GetMachineFunc func(
+		ctx context.Context, org string, machineId string,
+	) (*nico.Machine, *http.Response, error)
+
+	// Health / Fault events
+	ListFaultEventsFunc func(
+		ctx context.Context, org string, machineId string, state string, severity string,
+	) ([]nico.FaultEvent, *http.Response, error)
+
 	// VPC Peering methods
 	CreateVpcPeeringFunc func(
 		ctx context.Context, org string, req nico.VpcPeeringCreateRequest,
@@ -388,6 +398,26 @@ func (m *MockNcxInfraClient) BatchCreateInstance(
 ) ([]nico.Instance, *http.Response, error) {
 	if m.BatchCreateInstanceFunc != nil {
 		return m.BatchCreateInstanceFunc(ctx, org, req)
+	}
+	return nil, nil, nil
+}
+
+// Machine methods
+func (m *MockNcxInfraClient) GetMachine(
+	ctx context.Context, org string, machineId string,
+) (*nico.Machine, *http.Response, error) {
+	if m.GetMachineFunc != nil {
+		return m.GetMachineFunc(ctx, org, machineId)
+	}
+	return nil, nil, nil
+}
+
+// Health / Fault event methods
+func (m *MockNcxInfraClient) ListFaultEvents(
+	ctx context.Context, org string, machineId string, state string, severity string,
+) ([]nico.FaultEvent, *http.Response, error) {
+	if m.ListFaultEventsFunc != nil {
+		return m.ListFaultEventsFunc(ctx, org, machineId, state, severity)
 	}
 	return nil, nil, nil
 }

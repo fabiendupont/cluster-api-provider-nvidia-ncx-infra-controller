@@ -19,7 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
-	"net/http"
+	"strconv"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -40,9 +40,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	infrastructurev1 "github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/api/v1beta1"
-	"github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/pkg/scope"
 	nico "github.com/NVIDIA/ncx-infra-controller-rest/sdk/standard"
+	infrastructurev1 "github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/api/v1beta1"
+	ncxinframetrics "github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/internal/metrics"
+	"github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/pkg/scope"
 )
 
 const (
@@ -56,6 +57,8 @@ const (
 	InstanceProvisioningCondition clusterv1.ConditionType = "InstanceProvisioning"
 	NetworkConfiguredCondition    clusterv1.ConditionType = "NetworkConfigured"
 	BootstrapDataAppliedCondition clusterv1.ConditionType = "BootstrapDataApplied"
+	NicoHealthyCondition          clusterv1.ConditionType = "NicoHealthy"
+	NicoFaultRemediationCondition clusterv1.ConditionType = "NicoFaultRemediation"
 )
 
 // NcxInfraMachineReconciler reconciles a NcxInfraMachine object
@@ -154,11 +157,11 @@ func (r *NcxInfraMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	// Create cluster scope for credentials
 	clusterScope, err := scope.NewClusterScope(ctx, scope.ClusterScopeParams{
-		Client:               r.Client,
-		Cluster:              cluster,
+		Client:          r.Client,
+		Cluster:         cluster,
 		NcxInfraCluster: nvidiaCarbideCluster,
 		NcxInfraClient:  r.NcxInfraClient, // Will be nil in production, set for tests
-		OrgName:              r.OrgName,             // Will be empty in production (fetched from secret), set for tests
+		OrgName:         r.OrgName,        // Will be empty in production (fetched from secret), set for tests
 	})
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to create cluster scope: %w", err)
@@ -166,13 +169,13 @@ func (r *NcxInfraMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	// Create machine scope
 	machineScope, err := scope.NewMachineScope(scope.MachineScopeParams{
-		Client:               r.Client,
-		Cluster:              cluster,
-		Machine:              machine,
+		Client:          r.Client,
+		Cluster:         cluster,
+		Machine:         machine,
 		NcxInfraCluster: nvidiaCarbideCluster,
 		NcxInfraMachine: nvidiaCarbideMachine,
 		NcxInfraClient:  clusterScope.NcxInfraClient,
-		OrgName:              clusterScope.OrgName,
+		OrgName:         clusterScope.OrgName,
 	})
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to create machine scope: %w", err)
@@ -222,6 +225,30 @@ func (r *NcxInfraMachineReconciler) reconcileNormal(
 		return r.reconcileInstance(ctx, machineScope, clusterScope)
 	}
 
+	// Pre-flight health check: if targeting a specific machine and fault management
+	// is supported, verify the machine has no open critical faults before creating.
+	// Requeue with backoff since the fault may resolve via automated remediation.
+	if machineScope.NcxInfraMachine.Spec.InstanceType.MachineID != "" &&
+		!machineScope.NcxInfraMachine.Spec.InstanceType.AllowUnhealthyMachine &&
+		r.hasFaultManagement(ctx, clusterScope) {
+		targetMachineID := machineScope.NcxInfraMachine.Spec.InstanceType.MachineID
+		faults := r.listOpenFaultEvents(ctx, machineScope, targetMachineID)
+		if len(faults) > 0 {
+			msg := fmt.Sprintf("target machine %s has %d open fault(s): %s",
+				targetMachineID, len(faults), formatFaultMessage(faults))
+			logger.Info("Deferring instance creation due to unhealthy target machine",
+				"machineID", targetMachineID, "faults", len(faults))
+			r.recordEvent(machineScope.NcxInfraMachine, corev1.EventTypeWarning, "PreFlightHealthCheckFailed", msg)
+			conditions.Set(machineScope.NcxInfraMachine, metav1.Condition{
+				Type:    string(InstanceProvisionedCondition),
+				Status:  metav1.ConditionFalse,
+				Reason:  "PreFlightHealthCheckFailed",
+				Message: msg,
+			})
+			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+		}
+	}
+
 	// Create new instance.
 	// NOTE: BatchCreateInstance is available in the SDK for creating up to 18
 	// instances per call, but CAPI's reconcile-per-machine model makes batching
@@ -236,6 +263,9 @@ func (r *NcxInfraMachineReconciler) reconcileNormal(
 			Reason:  "InstanceCreationFailed",
 			Message: err.Error(),
 		})
+		if apiErr, ok := err.(*scope.APIError); ok && apiErr.IsTransient() {
+			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		}
 		return ctrl.Result{}, err
 	}
 
@@ -308,13 +338,16 @@ func (r *NcxInfraMachineReconciler) createInstance(
 		"role", machineScope.Role())
 
 	// Create instance via NVIDIA Carbide API
+	createStart := time.Now()
 	instance, httpResp, err := machineScope.NcxInfraClient.CreateInstance(ctx, machineScope.OrgName, instanceReq)
-	if err != nil {
-		return fmt.Errorf("failed to create instance: %w", err)
-	}
-
-	if httpResp.StatusCode != http.StatusOK && httpResp.StatusCode != http.StatusCreated {
-		return fmt.Errorf("failed to create instance, status %d", httpResp.StatusCode)
+	createAPIErr := scope.ClassifyAPIError(httpResp, err, "CreateInstance")
+	recordAPIMetrics("CreateInstance", createStart, createAPIErr)
+	if apiErr := createAPIErr; apiErr != nil {
+		if apiErr.IsTerminal() {
+			errReason := capierrors.MachineStatusError("CreateInstanceFailed")
+			setMachineFailure(machineScope.NcxInfraMachine, errReason, apiErr.Message)
+		}
+		return apiErr
 	}
 
 	if instance == nil || instance.Id == nil {
@@ -366,18 +399,30 @@ func (r *NcxInfraMachineReconciler) reconcileInstance(
 	logger := log.FromContext(ctx)
 
 	// Get instance status from NVIDIA Carbide
+	getStart := time.Now()
 	instance, httpResp, err := machineScope.NcxInfraClient.GetInstance(
 		ctx, machineScope.OrgName, machineScope.InstanceID())
-	if err != nil {
-		logger.Error(err, "failed to get instance status", "instanceID", machineScope.InstanceID())
-		return ctrl.Result{}, err
+	apiErr := scope.ClassifyAPIError(httpResp, err, "GetInstance")
+	recordAPIMetrics("GetInstance", getStart, apiErr)
+	if apiErr != nil {
+		if apiErr.IsNotFound() {
+			logger.Info("Instance no longer exists", "instanceID", machineScope.InstanceID())
+			errReason := capierrors.MachineStatusError("InstanceNotFound")
+			errMsg := fmt.Sprintf("Instance %s no longer exists", machineScope.InstanceID())
+			setMachineFailure(machineScope.NcxInfraMachine, errReason, errMsg)
+			return ctrl.Result{}, nil
+		}
+		if apiErr.IsTerminal() {
+			logger.Error(apiErr, "terminal error getting instance", "instanceID", machineScope.InstanceID())
+			return ctrl.Result{}, apiErr
+		}
+		logger.Info("Transient error getting instance, will retry",
+			"instanceID", machineScope.InstanceID(), "error", apiErr.Message)
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	}
 
-	if httpResp.StatusCode != http.StatusOK || instance == nil {
-		logger.Error(nil, "unexpected response getting instance",
-			"instanceID", machineScope.InstanceID(),
-			"status", httpResp.StatusCode)
-		return ctrl.Result{}, fmt.Errorf("failed to get instance, status %d", httpResp.StatusCode)
+	if instance == nil {
+		return ctrl.Result{}, fmt.Errorf("instance response is nil for %s", machineScope.InstanceID())
 	}
 
 	// Update instance state
@@ -416,64 +461,14 @@ func (r *NcxInfraMachineReconciler) reconcileInstance(
 		})
 	}
 
+	// Update health conditions from fault events (NEP-0007) if supported
+	if r.hasFaultManagement(ctx, clusterScope) {
+		r.updateHealthConditions(ctx, machineScope)
+	}
+
 	// Check if instance is ready
 	if instance.Status != nil && string(*instance.Status) == "Ready" {
-		machineScope.SetReady(true)
-		conditions.Set(machineScope.NcxInfraMachine, metav1.Condition{
-			Type:   string(InstanceProvisioningCondition),
-			Status: metav1.ConditionFalse,
-			Reason: "ProvisioningComplete",
-		})
-		conditions.Set(machineScope.NcxInfraMachine, metav1.Condition{
-			Type:   string(clusterv1.ReadyCondition),
-			Status: metav1.ConditionTrue,
-			Reason: "NcxInfraMachineReady",
-		})
-
-		// Apply post-creation updates if spec has changed
-		if updateReq, needsUpdate := r.buildUpdateRequest(machineScope, instance); needsUpdate {
-			logger.Info("Applying post-creation updates to instance", "instanceID", machineScope.InstanceID())
-			_, _, updateErr := machineScope.NcxInfraClient.UpdateInstance(
-				ctx, machineScope.OrgName, machineScope.InstanceID(), updateReq)
-			if updateErr != nil {
-				logger.Error(updateErr, "failed to update instance", "instanceID", machineScope.InstanceID())
-				r.recordEvent(machineScope.NcxInfraMachine, corev1.EventTypeWarning, "UpdateFailed",
-					"Failed to update instance %s: %v", machineScope.InstanceID(), updateErr)
-			} else {
-				r.recordEvent(machineScope.NcxInfraMachine, corev1.EventTypeNormal, "InstanceUpdated",
-					"Successfully updated instance %s", machineScope.InstanceID())
-			}
-		}
-
-		// Set control plane endpoint if not already configured.
-		// If a load balancer VIP is pre-configured in ControlPlaneEndpoint,
-		// it takes precedence over individual machine addresses.
-		// For HA control planes, the first ready machine sets the endpoint
-		// when no VIP is configured; subsequent machines don't overwrite it.
-		cpEndpoint := clusterScope.NcxInfraCluster.Spec.ControlPlaneEndpoint
-		if machineScope.IsControlPlane() && (cpEndpoint == nil || cpEndpoint.Host == "") {
-			if len(addresses) > 0 {
-				port := int32(6443)
-				if cpEndpoint != nil && cpEndpoint.Port != 0 {
-					port = cpEndpoint.Port
-				}
-				clusterScope.NcxInfraCluster.Spec.ControlPlaneEndpoint = &clusterv1.APIEndpoint{
-					Host: addresses[0].Address,
-					Port: port,
-				}
-				logger.Info("Updated control plane endpoint from first ready control plane machine",
-					"host", addresses[0].Address, "port", port)
-			}
-		}
-
-		instanceIDStr := ""
-		if instance.Id != nil {
-			instanceIDStr = *instance.Id
-		}
-		logger.Info("NcxInfraMachine is ready", "instanceID", instanceIDStr, "status", string(*instance.Status))
-		r.recordEvent(machineScope.NcxInfraMachine, corev1.EventTypeNormal, "InstanceReady",
-			"Instance %s is ready", instanceIDStr)
-		return ctrl.Result{}, nil
+		return r.handleInstanceReady(ctx, machineScope, clusterScope, instance, addresses)
 	}
 
 	// Instance is still provisioning or in error, requeue
@@ -491,10 +486,19 @@ func (r *NcxInfraMachineReconciler) reconcileInstance(
 		r.exposeStatusHistory(ctx, machineScope)
 	}
 
-	// Set failure info for error state
+	// Set failure info for error state, enriched with fault events when available
 	if statusStr == "Error" {
 		errReason := capierrors.MachineStatusError("ProvisioningFailed")
 		errMsg := fmt.Sprintf("Instance %s is in Error state", instanceIDStr)
+
+		// Try to enrich with fault event details if fault management is supported
+		if r.hasFaultManagement(ctx, clusterScope) {
+			if healthMsg := r.getMachineHealthMessage(ctx, machineScope); healthMsg != "" {
+				errMsg = fmt.Sprintf("Instance %s is in Error state: %s", instanceIDStr, healthMsg)
+				errReason = capierrors.UpdateMachineError
+			}
+		}
+
 		setMachineFailure(machineScope.NcxInfraMachine, errReason, errMsg)
 	}
 
@@ -512,6 +516,92 @@ func (r *NcxInfraMachineReconciler) reconcileInstance(
 	return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 }
 
+func (r *NcxInfraMachineReconciler) handleInstanceReady(
+	ctx context.Context,
+	machineScope *scope.MachineScope,
+	clusterScope *scope.ClusterScope,
+	instance *nico.Instance,
+	addresses []clusterv1.MachineAddress,
+) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
+	machineScope.SetReady(true)
+	ncxinframetrics.MachinesManaged.Inc()
+
+	// Record provisioning duration if instance has a creation timestamp
+	if instance.Created != nil {
+		duration := time.Since(*instance.Created).Seconds()
+		siteLabel := ""
+		if instance.SiteId != nil {
+			siteLabel = *instance.SiteId
+		}
+		instanceTypeLabel := ""
+		if instance.InstanceTypeId != nil {
+			instanceTypeLabel = *instance.InstanceTypeId
+		}
+		ncxinframetrics.InstanceProvisioningDuration.
+			WithLabelValues(siteLabel, instanceTypeLabel).Observe(duration)
+	}
+
+	conditions.Set(machineScope.NcxInfraMachine, metav1.Condition{
+		Type:   string(InstanceProvisioningCondition),
+		Status: metav1.ConditionFalse,
+		Reason: "ProvisioningComplete",
+	})
+	conditions.Set(machineScope.NcxInfraMachine, metav1.Condition{
+		Type:   string(clusterv1.ReadyCondition),
+		Status: metav1.ConditionTrue,
+		Reason: "NcxInfraMachineReady",
+	})
+
+	// Apply post-creation updates if spec has changed
+	if updateReq, needsUpdate := r.buildUpdateRequest(machineScope, instance); needsUpdate {
+		logger.Info("Applying post-creation updates to instance",
+			"instanceID", machineScope.InstanceID())
+		_, _, updateErr := machineScope.NcxInfraClient.UpdateInstance(
+			ctx, machineScope.OrgName, machineScope.InstanceID(), updateReq)
+		if updateErr != nil {
+			logger.Error(updateErr, "failed to update instance",
+				"instanceID", machineScope.InstanceID())
+			r.recordEvent(machineScope.NcxInfraMachine,
+				corev1.EventTypeWarning, "UpdateFailed",
+				"Failed to update instance %s: %v",
+				machineScope.InstanceID(), updateErr)
+		} else {
+			r.recordEvent(machineScope.NcxInfraMachine,
+				corev1.EventTypeNormal, "InstanceUpdated",
+				"Successfully updated instance %s", machineScope.InstanceID())
+		}
+	}
+
+	// Set control plane endpoint if not already configured.
+	cpEndpoint := clusterScope.NcxInfraCluster.Spec.ControlPlaneEndpoint
+	if machineScope.IsControlPlane() && (cpEndpoint == nil || cpEndpoint.Host == "") {
+		if len(addresses) > 0 {
+			port := int32(6443)
+			if cpEndpoint != nil && cpEndpoint.Port != 0 {
+				port = cpEndpoint.Port
+			}
+			clusterScope.NcxInfraCluster.Spec.ControlPlaneEndpoint = &clusterv1.APIEndpoint{
+				Host: addresses[0].Address,
+				Port: port,
+			}
+			logger.Info("Updated control plane endpoint",
+				"host", addresses[0].Address, "port", port)
+		}
+	}
+
+	instanceIDStr := ""
+	if instance.Id != nil {
+		instanceIDStr = *instance.Id
+	}
+	logger.Info("NcxInfraMachine is ready",
+		"instanceID", instanceIDStr, "status", string(*instance.Status))
+	r.recordEvent(machineScope.NcxInfraMachine, corev1.EventTypeNormal, "InstanceReady",
+		"Instance %s is ready", instanceIDStr)
+	return ctrl.Result{}, nil
+}
+
 //nolint:unparam // ctrl.Result is part of the reconciler interface contract
 func (r *NcxInfraMachineReconciler) reconcileDelete(
 	ctx context.Context, machineScope *scope.MachineScope,
@@ -523,25 +613,30 @@ func (r *NcxInfraMachineReconciler) reconcileDelete(
 	if machineScope.InstanceID() != "" {
 		logger.Info("Deleting NVIDIA Carbide instance", "instanceID", machineScope.InstanceID())
 
+		deleteStart := time.Now()
 		httpResp, err := machineScope.NcxInfraClient.DeleteInstance(ctx, machineScope.OrgName, machineScope.InstanceID())
-		if err != nil {
-			if httpResp != nil && httpResp.StatusCode == http.StatusNotFound {
+		delAPIErr := scope.ClassifyAPIError(httpResp, err, "DeleteInstance")
+		recordAPIMetrics("DeleteInstance", deleteStart, delAPIErr)
+		if apiErr := delAPIErr; apiErr != nil {
+			if apiErr.IsNotFound() {
 				logger.Info("Instance already deleted", "instanceID", machineScope.InstanceID())
+			} else if apiErr.IsTransient() {
+				logger.Info("Transient error deleting instance, will retry",
+					"instanceID", machineScope.InstanceID(), "error", apiErr.Message)
+				return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 			} else {
-				logger.Error(err, "failed to delete instance", "instanceID", machineScope.InstanceID())
-				return ctrl.Result{}, err
+				logger.Error(apiErr, "failed to delete instance", "instanceID", machineScope.InstanceID())
+				return ctrl.Result{}, apiErr
 			}
-		} else if httpResp.StatusCode != http.StatusOK && httpResp.StatusCode != http.StatusNoContent &&
-			httpResp.StatusCode != http.StatusNotFound {
-			logger.Error(nil, "failed to delete instance",
-				"instanceID", machineScope.InstanceID(),
-				"status", httpResp.StatusCode)
-			return ctrl.Result{}, fmt.Errorf("failed to delete instance, status %d", httpResp.StatusCode)
 		}
 	}
 
 	// Remove finalizer
 	controllerutil.RemoveFinalizer(machineScope.NcxInfraMachine, NcxInfraMachineFinalizer)
+
+	if machineScope.IsReady() {
+		ncxinframetrics.MachinesManaged.Dec()
+	}
 
 	logger.Info("Successfully deleted NcxInfraMachine")
 	return ctrl.Result{}, nil
@@ -741,6 +836,192 @@ func (r *NcxInfraMachineReconciler) applyOptionalInstanceFields(
 	}
 }
 
+// hasFaultManagement checks whether the site supports fault management (NEP-0007).
+// Returns false if the capability is absent or the API is unreachable.
+func (r *NcxInfraMachineReconciler) hasFaultManagement(
+	ctx context.Context, clusterScope *scope.ClusterScope,
+) bool {
+	logger := log.FromContext(ctx)
+
+	siteID, err := clusterScope.SiteID(ctx)
+	if err != nil {
+		logger.V(1).Info("Cannot resolve site ID for capability check", "error", err)
+		return false
+	}
+
+	site, _, err := clusterScope.NcxInfraClient.GetSite(ctx, clusterScope.OrgName, siteID)
+	if err != nil || site == nil || site.Capabilities == nil {
+		logger.V(1).Info("Cannot fetch site capabilities", "siteID", siteID, "error", err)
+		return false
+	}
+
+	return site.Capabilities.FaultManagement != nil && *site.Capabilities.FaultManagement
+}
+
+// updateHealthConditions sets NicoHealthy and NicoFaultRemediation conditions
+// based on the physical machine's fault events.
+func (r *NcxInfraMachineReconciler) updateHealthConditions(
+	ctx context.Context, machineScope *scope.MachineScope,
+) {
+	physMachineID := machineScope.MachineID()
+	if physMachineID == "" {
+		return
+	}
+
+	faults := r.listOpenFaultEvents(ctx, machineScope, physMachineID)
+
+	if len(faults) == 0 {
+		conditions.Set(machineScope.NcxInfraMachine, metav1.Condition{
+			Type:   string(NicoHealthyCondition),
+			Status: metav1.ConditionTrue,
+			Reason: "MachineHealthy",
+		})
+		conditions.Set(machineScope.NcxInfraMachine, metav1.Condition{
+			Type:   string(NicoFaultRemediationCondition),
+			Status: metav1.ConditionFalse,
+			Reason: "NoFaultsDetected",
+		})
+		return
+	}
+
+	msg := formatFaultMessage(faults)
+
+	conditions.Set(machineScope.NcxInfraMachine, metav1.Condition{
+		Type:    string(NicoHealthyCondition),
+		Status:  metav1.ConditionFalse,
+		Reason:  "MachineUnhealthy",
+		Message: msg,
+	})
+
+	// Check if any fault has an active remediation workflow
+	remediating := false
+	for _, fault := range faults {
+		if fault.RemediationWorkflowId != nil && *fault.RemediationWorkflowId != "" {
+			remediating = true
+			break
+		}
+	}
+
+	if remediating {
+		conditions.Set(machineScope.NcxInfraMachine, metav1.Condition{
+			Type:    string(NicoFaultRemediationCondition),
+			Status:  metav1.ConditionTrue,
+			Reason:  "RemediationInProgress",
+			Message: "Automated fault remediation in progress",
+		})
+	} else {
+		conditions.Set(machineScope.NcxInfraMachine, metav1.Condition{
+			Type:   string(NicoFaultRemediationCondition),
+			Status: metav1.ConditionFalse,
+			Reason: "NoRemediationInProgress",
+		})
+	}
+
+	ncxinframetrics.MachinesUnhealthy.Inc()
+	r.recordEvent(machineScope.NcxInfraMachine, corev1.EventTypeWarning, "MachineUnhealthy",
+		"Physical machine %s has %d open fault(s): %s", physMachineID, len(faults), msg)
+}
+
+// getMachineHealthMessage queries fault events for the physical machine and returns
+// a human-readable message describing any open critical faults. Returns empty string
+// if no faults exist or the health API is unavailable.
+func (r *NcxInfraMachineReconciler) getMachineHealthMessage(
+	ctx context.Context, machineScope *scope.MachineScope,
+) string {
+	physMachineID := machineScope.MachineID()
+	if physMachineID == "" {
+		return ""
+	}
+
+	faults := r.listOpenFaultEvents(ctx, machineScope, physMachineID)
+	if len(faults) == 0 {
+		return ""
+	}
+
+	return formatFaultMessage(faults)
+}
+
+// listOpenFaultEvents queries the HealthAPI for open fault events on a machine.
+// Falls back to GetMachine health probes if the fault events API is unavailable.
+// Returns nil if no faults exist or the API is unavailable.
+func (r *NcxInfraMachineReconciler) listOpenFaultEvents(
+	ctx context.Context, machineScope *scope.MachineScope, physMachineID string,
+) []nico.FaultEvent {
+	logger := log.FromContext(ctx)
+
+	faults, _, err := machineScope.NcxInfraClient.ListFaultEvents(
+		ctx, machineScope.OrgName, physMachineID, "open", "critical")
+	if err != nil {
+		logger.V(1).Info("Failed to list fault events, falling back to machine health",
+			"machineID", physMachineID, "error", err)
+		return r.fallbackToMachineHealth(ctx, machineScope, physMachineID)
+	}
+
+	return faults
+}
+
+// fallbackToMachineHealth converts Machine health probe alerts into FaultEvent structs
+// for consistent handling when the HealthAPI is unavailable.
+func (r *NcxInfraMachineReconciler) fallbackToMachineHealth(
+	ctx context.Context, machineScope *scope.MachineScope, physMachineID string,
+) []nico.FaultEvent {
+	logger := log.FromContext(ctx)
+
+	machine, _, err := machineScope.NcxInfraClient.GetMachine(ctx, machineScope.OrgName, physMachineID)
+	if err != nil {
+		logger.V(1).Info("Failed to fetch machine health", "machineID", physMachineID, "error", err)
+		return nil
+	}
+
+	if machine == nil || machine.Health == nil || len(machine.Health.Alerts) == 0 {
+		return nil
+	}
+
+	// Convert health probe alerts to FaultEvent for consistent handling
+	faults := make([]nico.FaultEvent, 0, len(machine.Health.Alerts))
+	for _, alert := range machine.Health.Alerts {
+		fault := nico.FaultEvent{
+			MachineId: &physMachineID,
+		}
+		if alert.Id != nil {
+			fault.Classification = alert.Id
+		}
+		if alert.Message != nil {
+			fault.Message = alert.Message
+		}
+		state := "open"
+		fault.State = &state
+		severity := "critical"
+		fault.Severity = &severity
+		faults = append(faults, fault)
+	}
+	return faults
+}
+
+// formatFaultMessage builds a human-readable summary from fault events.
+func formatFaultMessage(faults []nico.FaultEvent) string {
+	if len(faults) == 0 {
+		return ""
+	}
+
+	fault := faults[0]
+	msg := ""
+	if fault.Classification != nil {
+		msg = *fault.Classification
+	}
+	if fault.Message != nil && *fault.Message != "" {
+		if msg != "" {
+			msg += " — " + *fault.Message
+		} else {
+			msg = *fault.Message
+		}
+	}
+	if len(faults) > 1 {
+		msg += fmt.Sprintf(" (+%d more faults)", len(faults)-1)
+	}
+	return msg
+}
+
 // exposeStatusHistory fetches the instance status history and emits events.
 func (r *NcxInfraMachineReconciler) exposeStatusHistory(
 	ctx context.Context, machineScope *scope.MachineScope,
@@ -861,6 +1142,14 @@ func (r *NcxInfraMachineReconciler) findExistingInstance(
 func (r *NcxInfraMachineReconciler) recordEvent(obj runtime.Object, eventType, reason, messageFmt string, args ...interface{}) {
 	if r.Recorder != nil {
 		r.Recorder.Eventf(obj, eventType, reason, messageFmt, args...)
+	}
+}
+
+// recordAPIMetrics records API latency and error metrics for a completed API call.
+func recordAPIMetrics(method string, startTime time.Time, apiErr *scope.APIError) {
+	ncxinframetrics.APILatency.WithLabelValues(method).Observe(time.Since(startTime).Seconds())
+	if apiErr != nil {
+		ncxinframetrics.APIErrors.WithLabelValues(method, strconv.Itoa(apiErr.StatusCode)).Inc()
 	}
 }
 

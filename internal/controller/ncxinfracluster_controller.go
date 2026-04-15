@@ -40,10 +40,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	nico "github.com/NVIDIA/ncx-infra-controller-rest/sdk/standard"
 	infrastructurev1 "github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/api/v1beta1"
 	ncxinframetrics "github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/internal/metrics"
 	"github.com/fabiendupont/cluster-api-provider-nvidia-ncx-infra-controller/pkg/scope"
-	nico "github.com/NVIDIA/ncx-infra-controller-rest/sdk/standard"
 )
 
 const (
@@ -126,11 +126,11 @@ func (r *NcxInfraClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	// Create cluster scope
 	clusterScope, err := scope.NewClusterScope(ctx, scope.ClusterScopeParams{
-		Client:               r.Client,
-		Cluster:              cluster,
+		Client:          r.Client,
+		Cluster:         cluster,
 		NcxInfraCluster: nvidiaCarbideCluster,
 		NcxInfraClient:  r.NcxInfraClient, // Will be nil in production, set for tests
-		OrgName:              r.OrgName,             // Will be empty in production (fetched from secret), set for tests
+		OrgName:         r.OrgName,        // Will be empty in production (fetched from secret), set for tests
 	})
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to create cluster scope: %w", err)

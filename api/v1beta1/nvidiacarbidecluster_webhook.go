@@ -58,7 +58,7 @@ func (r *NcxInfraCluster) ValidateUpdate(_ context.Context, oldObj, newObj runti
 		return nil, fmt.Errorf("expected NcxInfraCluster, got %T", newObj)
 	}
 
-	var allErrs field.ErrorList
+	allErrs := make(field.ErrorList, 0, 2) //nolint:mnd // initial capacity for typical validation
 
 	// Validate the new spec
 	allErrs = append(allErrs, newCluster.validateCluster()...)

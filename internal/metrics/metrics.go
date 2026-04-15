@@ -40,9 +40,29 @@ var (
 	APIErrors = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "capi_ncx_infra_api_errors_total",
-			Help: "Carbide API errors by status code",
+			Help: "Carbide API errors by method and status code",
 		},
 		[]string{"method", "status_code"},
+	)
+	APILatency = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "capi_ncx_infra_api_latency_seconds",
+			Help:    "Carbide API call latency by endpoint",
+			Buckets: []float64{0.1, 0.25, 0.5, 1, 2.5, 5, 10},
+		},
+		[]string{"method"},
+	)
+	MachinesManaged = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "capi_ncx_infra_machines_managed",
+			Help: "Number of NcxInfraMachines currently managed",
+		},
+	)
+	MachinesUnhealthy = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "capi_ncx_infra_machines_unhealthy",
+			Help: "Number of NcxInfraMachines with active health faults",
+		},
 	)
 )
 
@@ -51,5 +71,8 @@ func init() {
 		InstanceProvisioningDuration,
 		VPCCount,
 		APIErrors,
+		APILatency,
+		MachinesManaged,
+		MachinesUnhealthy,
 	)
 }
